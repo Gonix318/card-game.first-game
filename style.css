@@ -1,0 +1,1127 @@
+/* ==================== 1. BIẾN MÀU SẮC & GIAO DIỆN CHỦ ĐẠO ==================== */
+:root {
+  --bg-deep: #08090e;
+  --bg-surface: #10121d;
+  --bg-panel: rgba(16, 18, 29, 0.88);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+
+  --neon-cyan: #00f2fe;
+  --neon-purple: #9d4edd;
+  --neon-gold: #ffbe0b;
+  --neon-red: #ff0055;
+  --neon-green: #00f076;
+
+  /* Màu 5 Bậc Rank */
+  --rank-c: #8d99ae;
+  --rank-b: #00f2fe;
+  --rank-a: #9d4edd;
+  --rank-s: #ffbe0b;
+  --rank-sss: linear-gradient(135deg, #ff007f, #00f2fe, #ffbe0b, #9d4edd);
+
+  /* Màu 4 Phẩm Cấp Gói */
+  --pack-bronze: #cd7f32;
+  --pack-silver: #c0c0c0;
+  --pack-gold: #ffbe0b;
+  --pack-diamond: #00f2fe;
+
+  --font-title: 'Orbitron', sans-serif;
+  --font-text: 'Rajdhani', sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg-deep);
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(157, 78, 221, 0.12) 0%, transparent 45%),
+    radial-gradient(circle at 90% 80%, rgba(0, 242, 254, 0.1) 0%, transparent 50%);
+  color: #edf2f4;
+  font-family: var(--font-text);
+  font-size: 16px;
+  min-height: 100vh;
+  overflow-x: hidden;
+  user-select: none;
+}
+
+/* ==================== 2. GLOBAL ALERT BANNER ==================== */
+.global-alert {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  background: linear-gradient(90deg, #ff0055, #ffbe0b, #00f2fe, #ff0055);
+  background-size: 300% 100%;
+  animation: alertWave 4s linear infinite;
+  color: #000;
+  font-family: var(--font-title);
+  font-weight: 900;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 16px;
+  z-index: 100000;
+  box-shadow: 0 4px 25px rgba(255, 0, 85, 0.7);
+}
+
+.global-alert.hidden { display: none; }
+
+@keyframes alertWave {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+
+.btn-admin-secret {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  z-index: 999;
+  transition: all 0.2s;
+}
+.btn-admin-secret:hover {
+  background: var(--neon-gold);
+  color: #000;
+  transform: scale(1.15) rotate(15deg);
+}
+
+/* ==================== 3. TOP HUD (CHỈ SỐ TÀI KHOẢN & 5 TÀI NGUYÊN) ==================== */
+.top-hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 24px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid rgba(0, 242, 254, 0.25);
+  backdrop-filter: blur(12px);
+  position: sticky;
+  top: 0;
+  z-index: 200;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar-frame {
+  width: 46px;
+  height: 46px;
+  background: #191c2b;
+  border: 2px solid var(--neon-cyan);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.3);
+}
+
+.name-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+#playerDisplayName {
+  font-family: var(--font-title);
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.level-tag {
+  background: var(--neon-purple);
+  font-family: var(--font-title);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 1px 7px;
+  border-radius: 4px;
+  box-shadow: 0 0 8px rgba(157, 78, 221, 0.6);
+}
+
+.exp-bar-wrap {
+  width: 150px;
+  height: 12px;
+  background: #141724;
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.exp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #9d4edd, #00f2fe);
+  transition: width 0.4s ease;
+}
+
+.exp-text {
+  position: absolute;
+  inset: 0;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-shadow: 0 1px 3px #000;
+}
+
+.currency-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.currency-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: #151827;
+  padding: 5px 11px;
+  border-radius: 18px;
+  font-family: var(--font-title);
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--border-subtle);
+}
+
+.gold-badge { color: var(--neon-gold); border-color: rgba(255, 190, 11, 0.3); }
+.gem-badge { color: var(--neon-cyan); border-color: rgba(0, 242, 254, 0.3); }
+.dust-badge { color: #f72585; border-color: rgba(247, 37, 133, 0.3); }
+.awaken-badge { color: #b5179e; border-color: rgba(181, 23, 158, 0.3); }
+.mythic-badge { color: #7209b7; border-color: rgba(114, 9, 183, 0.3); }
+
+/* ==================== 4. MAIN NAVIGATION TABS ==================== */
+.main-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 20px 0 20px;
+  background: #0d0f17;
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
+}
+
+.nav-btn {
+  background: transparent;
+  color: #8d99ae;
+  border: none;
+  font-family: var(--font-title);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 10px 16px;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.nav-btn:hover { color: #fff; }
+.nav-btn.active {
+  color: var(--neon-cyan);
+  border-bottom-color: var(--neon-cyan);
+  text-shadow: 0 0 10px rgba(0, 242, 254, 0.6);
+}
+
+.content-viewport {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 16px 80px 16px;
+}
+
+.tab-pane { display: none; }
+.tab-pane.active { display: block; animation: tabFadeIn 0.3s ease-out; }
+
+@keyframes tabFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.section-title {
+  font-family: var(--font-title);
+  font-size: 22px;
+  letter-spacing: 1.5px;
+  color: #fff;
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.section-subtitle {
+  font-size: 14px;
+  color: #8d99ae;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+/* ==================== 5. SÀN ĐẤU TURN-BASED 5 VS 5 & MULTI-HIT ==================== */
+.battle-stage {
+  background: #0f111d;
+  border: 1px solid rgba(0, 242, 254, 0.3);
+  border-radius: 20px;
+  padding: 20px;
+  position: relative;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+}
+
+.team-side {
+  background: rgba(18, 20, 33, 0.6);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border-subtle);
+}
+
+.team-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-family: var(--font-title);
+  font-size: 14px;
+}
+
+.turn-indicator {
+  background: var(--neon-cyan);
+  color: #000;
+  font-weight: 900;
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  animation: pulseGlow 1.5s infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.05); }
+}
+
+.field-slots-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+
+/* Thẻ bài trên sân đấu */
+.battle-card {
+  background: var(--bg-surface);
+  border: 2px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 8px 6px;
+  text-align: center;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s;
+  min-height: 150px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.battle-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--neon-cyan);
+}
+
+.battle-card.selected-attacker {
+  border-color: var(--neon-gold) !important;
+  box-shadow: 0 0 15px rgba(255, 190, 11, 0.8);
+  transform: translateY(-8px);
+}
+
+.battle-card.targetable {
+  border-color: var(--neon-red) !important;
+  animation: targetBlink 1s infinite;
+}
+
+@keyframes targetBlink {
+  0%, 100% { box-shadow: 0 0 5px rgba(255, 0, 85, 0.4); }
+  50% { box-shadow: 0 0 18px rgba(255, 0, 85, 0.9); }
+}
+
+.battle-card.dead {
+  opacity: 0.3;
+  filter: grayscale(1);
+  pointer-events: none;
+}
+
+/* Chỉ số thẻ trên bàn cờ */
+.card-stars {
+  font-size: 11px;
+  color: var(--neon-gold);
+  line-height: 1;
+  margin-bottom: 2px;
+}
+.card-stars.mythic-stars {
+  color: #ff007f;
+  text-shadow: 0 0 6px #ff007f;
+}
+
+.card-title {
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #fff;
+}
+
+.card-art-emoji { font-size: 26px; margin: 4px 0; }
+
+.card-hp-bar {
+  width: 100%;
+  height: 6px;
+  background: #25283b;
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 4px 0;
+}
+
+.card-hp-fill {
+  height: 100%;
+  background: var(--neon-green);
+  transition: width 0.3s;
+}
+
+.bot-team .card-hp-fill { background: var(--neon-red); }
+
+.card-combat-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 700;
+}
+.card-combat-stats .atk { color: #ff5722; }
+.card-combat-stats .spd { color: var(--neon-cyan); }
+
+/* VÙNG COMBAT LOG & MULTI-HIT BURST */
+.combat-log-zone {
+  text-align: center;
+  padding: 12px;
+  min-height: 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.combat-log {
+  font-family: var(--font-title);
+  font-size: 13px;
+  color: var(--neon-gold);
+}
+
+.multi-hit-burst {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-title);
+  font-size: 32px;
+  font-weight: 900;
+  color: #ff0055;
+  text-shadow: 0 0 20px #ff0055, 0 0 40px #ffbe0b;
+  animation: burstShake 0.4s ease-out;
+}
+
+.multi-hit-burst.hidden { display: none; }
+
+@keyframes burstShake {
+  0% { transform: translateY(-50%) scale(0.6); opacity: 0; }
+  50% { transform: translateY(-50%) scale(1.3); opacity: 1; }
+  100% { transform: translateY(-50%) scale(1); opacity: 1; }
+}
+
+/* HÀNG GHẾ DỰ BỊ (BENCH ZONE) */
+.bench-zone {
+  background: rgba(10, 11, 18, 0.7);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+}
+
+.bench-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #8d99ae;
+  margin-bottom: 8px;
+}
+
+.bench-slots-row {
+  display: flex;
+  gap: 12px;
+}
+
+.bench-card {
+  width: 110px;
+  background: #161827;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 6px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.bench-card:hover {
+  border-color: var(--neon-gold);
+  transform: scale(1.05);
+}
+
+/* ==================== 6. VÒNG XOAY COOLDOWN BUFF ==================== */
+.inbattle-buff-panel {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.buff-btn-box { position: relative; }
+
+.btn-buff {
+  width: 65px;
+  height: 65px;
+  background: #17192a;
+  border: 2px solid var(--neon-cyan);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: #fff;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.btn-buff:hover:not(:disabled) {
+  transform: scale(1.08);
+  border-color: var(--neon-gold);
+}
+
+.buff-icon { font-size: 20px; }
+.buff-label { font-size: 10px; font-weight: 700; white-space: nowrap; }
+
+.cooldown-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.cooldown-overlay.hidden { display: none; }
+
+.cd-number {
+  font-family: var(--font-title);
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--neon-red);
+}
+
+.btn-surrender {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #8d99ae;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-left: 10px;
+}
+.btn-surrender:hover { color: #fff; border-color: var(--neon-red); }
+
+/* ==================== 7. CHỌN BOT & PHỤ BẢN BOSS ==================== */
+.bot-grid, .boss-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.bot-card, .boss-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 20px 16px;
+  text-align: center;
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.bot-card:hover, .boss-card:hover {
+  transform: translateY(-5px);
+  border-color: var(--neon-cyan);
+}
+
+.bot-card.boss, .boss-card.mythic-boss {
+  border-color: var(--neon-red);
+  box-shadow: 0 0 25px rgba(255, 0, 85, 0.25);
+}
+
+.bot-rank-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-family: var(--font-title);
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+.bot-rank-tag.wood { background: #5a3e28; color: #ffd8be; }
+.bot-rank-tag.bronze { background: var(--pack-bronze); color: #fff; }
+.bot-rank-tag.silver { background: #718096; color: #fff; }
+.bot-rank-tag.gold { background: var(--neon-gold); color: #000; }
+.bot-rank-tag.mythic { background: var(--neon-red); color: #fff; }
+
+.bot-avatar, .boss-icon { font-size: 44px; margin-bottom: 10px; }
+.bot-name, .boss-card h3 { font-family: var(--font-title); font-size: 16px; margin-bottom: 6px; }
+.bot-desc, .boss-card p { font-size: 12px; color: #a0aec0; margin-bottom: 12px; }
+.reward-preview, .boss-drop-preview { font-size: 12px; color: var(--neon-gold); font-weight: 700; margin-bottom: 14px; }
+
+.btn-battle {
+  width: 100%;
+  background: linear-gradient(135deg, #00f2fe, #4facfe);
+  color: #000;
+  border: none;
+  font-family: var(--font-title);
+  font-weight: 800;
+  font-size: 13px;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* ==================== 8. CỬA HÀNG GACHA (4 PHẨM CẤP GÓI) ==================== */
+.pack-size-selector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.selector-label { font-size: 13px; font-weight: 700; color: #8d99ae; }
+
+.size-buttons { display: flex; gap: 8px; }
+
+.btn-size {
+  background: #141727;
+  color: #8d99ae;
+  border: 1px solid var(--border-subtle);
+  font-family: var(--font-title);
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+}
+
+.btn-size.active {
+  background: var(--neon-cyan);
+  color: #000;
+  font-weight: 900;
+  border-color: var(--neon-cyan);
+}
+
+.pack-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 20px;
+}
+
+.pack-item {
+  background: #131626;
+  border-radius: 16px;
+  padding: 24px 16px;
+  text-align: center;
+  border: 2px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: transform 0.25s, box-shadow 0.25s;
+}
+
+.pack-item:hover { transform: translateY(-6px); }
+
+.pack-bronze { border-color: var(--pack-bronze); box-shadow: 0 4px 15px rgba(205, 127, 50, 0.25); }
+.pack-silver { border-color: var(--pack-silver); box-shadow: 0 4px 15px rgba(192, 192, 192, 0.25); }
+.pack-gold { border-color: var(--pack-gold); box-shadow: 0 4px 20px rgba(255, 190, 11, 0.3); }
+.pack-diamond {
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 25px rgba(0, 242, 254, 0.45);
+  background: radial-gradient(circle at 50% 0%, rgba(0, 242, 254, 0.15), #131626 75%);
+}
+
+.pack-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-family: var(--font-title);
+  font-weight: 800;
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+
+.pack-bronze .pack-badge { background: #5c3a21; color: #ffd8be; }
+.pack-silver .pack-badge { background: #4a5568; color: #edf2f7; }
+.pack-gold .pack-badge { background: #744210; color: #fefcbf; }
+.pack-diamond .pack-badge { background: #1a365d; color: #bee3f8; border: 1px solid var(--neon-cyan); }
+
+.pack-art { font-size: 48px; margin-bottom: 12px; }
+.pack-item h3 { font-family: var(--font-title); font-size: 17px; margin-bottom: 8px; }
+.pack-item p { font-size: 13px; color: #a0aec0; margin-bottom: 14px; line-height: 1.4; }
+
+.pack-rate-tag {
+  font-size: 11px;
+  color: #a0aec0;
+  background: rgba(0,0,0,0.4);
+  padding: 6px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.btn-buy-pack {
+  background: linear-gradient(135deg, #2b6cb0, #4299e1);
+  color: #fff;
+  border: none;
+  font-family: var(--font-title);
+  font-weight: 800;
+  font-size: 13px;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-buy-pack:hover { opacity: 0.9; transform: scale(1.02); }
+.pack-diamond .btn-buy-pack {
+  background: linear-gradient(135deg, #00f2fe, #9d4edd);
+}
+
+/* ==================== 9. HIỆU ỨNG LẬT THẺ 3D KHI BÓC PACK ==================== */
+.gacha-reveal-container {
+  background: #0d0f19;
+  border: 2px solid rgba(0, 242, 254, 0.4);
+  border-radius: 20px;
+  padding: 24px;
+  text-align: center;
+}
+
+.reveal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.btn-skip-reveal {
+  background: linear-gradient(135deg, #ff0055, #ff5722);
+  color: #fff;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-family: var(--font-title);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.cards-reveal-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 24px;
+  perspective: 1200px;
+}
+
+/* KHUNG 3D THẺ BÀI */
+.card-3d-wrap {
+  width: 140px;
+  height: 200px;
+  position: relative;
+  cursor: pointer;
+}
+
+.card-inner {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.card-3d-wrap.flipped .card-inner {
+  transform: rotateY(180deg);
+}
+
+.card-front, .card-back {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  backface-visibility: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.card-back {
+  background: linear-gradient(135deg, #1b1e33, #0b0c16);
+  border: 2px solid #4a5568;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--neon-cyan);
+  font-family: var(--font-title);
+  font-size: 26px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+}
+
+.card-front {
+  transform: rotateY(180deg);
+  background: #141726;
+  border: 2px solid #fff;
+}
+
+/* VIỀN PHÁT SÁNG 5 BẬC RANK */
+.card-front.rank-c { border-color: var(--rank-c); box-shadow: 0 0 10px rgba(141, 153, 174, 0.3); }
+.card-front.rank-b { border-color: var(--rank-b); box-shadow: 0 0 14px rgba(0, 242, 254, 0.45); }
+.card-front.rank-a { border-color: var(--rank-a); box-shadow: 0 0 16px rgba(157, 78, 221, 0.6); }
+.card-front.rank-s { border-color: var(--rank-s); box-shadow: 0 0 22px rgba(255, 190, 11, 0.75); }
+
+.card-front.rank-sss {
+  border-color: transparent;
+  position: relative;
+  box-shadow: 0 0 25px rgba(255, 0, 127, 0.8);
+  animation: sssAura 2s infinite alternate;
+}
+
+.card-front.rank-sss::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 14px;
+  background: var(--rank-sss);
+  z-index: -1;
+  animation: alertWave 2s linear infinite;
+}
+
+@keyframes sssAura {
+  0% { transform: scale(1); box-shadow: 0 0 20px #ff007f; }
+  100% { transform: scale(1.04); box-shadow: 0 0 32px #00f2fe; }
+}
+
+/* ==================== 10. LÒ RÈN NÂNG SAO & THỨC TỈNH (0-7⭐) ==================== */
+.forge-container {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 24px;
+  background: #111322;
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.forge-target-card {
+  border: 2px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  min-height: 280px;
+  background: rgba(0,0,0,0.25);
+  text-align: center;
+}
+
+.forge-empty-prompt { font-size: 13px; color: #718096; }
+
+.forge-upgrade-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.forge-upgrade-panel h3 {
+  font-family: var(--font-title);
+  font-size: 16px;
+  margin-bottom: 16px;
+  color: var(--neon-gold);
+}
+
+.requirements-box {
+  background: #17192a;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.req-item { font-size: 14px; margin-bottom: 10px; }
+.req-item b { color: #fff; }
+
+.stat-boost-preview {
+  font-size: 13px;
+  color: var(--neon-green);
+  font-weight: 700;
+  margin-bottom: 20px;
+}
+
+/* ==================== 11. KHO THẺ & ĐỘI HÌNH (5 CHÍNH + 2 DỰ BỊ) ==================== */
+.active-formation-panel {
+  background: #131525;
+  border: 1px dashed var(--neon-gold);
+  border-radius: 16px;
+  padding: 18px;
+  margin-bottom: 24px;
+}
+
+.formation-section { margin-bottom: 16px; }
+.formation-section:last-child { margin-bottom: 0; }
+
+.formation-section h4 {
+  font-family: var(--font-title);
+  font-size: 12px;
+  color: var(--neon-gold);
+  margin-bottom: 10px;
+}
+
+.deck-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.deck-row.main-formation { min-height: 140px; }
+.deck-row.sub-formation { min-height: 100px; }
+
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.filter-btn {
+  background: #161828;
+  color: #8d99ae;
+  border: 1px solid var(--border-subtle);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.filter-btn.active {
+  background: var(--neon-cyan);
+  color: #000;
+  font-weight: 800;
+}
+
+.collection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 14px;
+}
+
+/* ==================== 12. MINIGAME CÀY TIỀN ==================== */
+.minigame-arena {
+  background: #141728;
+  border: 1px solid rgba(255, 190, 11, 0.3);
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+}
+
+.minigame-stats {
+  display: flex;
+  justify-content: space-around;
+  font-family: var(--font-title);
+  font-size: 16px;
+  margin-bottom: 20px;
+}
+
+.minigame-stats b { color: var(--neon-gold); }
+
+.target-field {
+  width: 100%;
+  height: 280px;
+  background: #0a0b14;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.coin-target {
+  position: absolute;
+  width: 50px;
+  height: 50px;
+  background: radial-gradient(circle, #ffbe0b, #d48b00);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  cursor: pointer;
+  animation: popTarget 0.2s ease-out;
+}
+
+@keyframes popTarget {
+  0% { transform: scale(0); }
+  100% { transform: scale(1); }
+}
+
+/* ==================== 13. CÁC MODAL HỆ THỐNG & LEVEL UP ==================== */
+.level-up-modal, .combo-banner-modal, .admin-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 10000;
+}
+
+.level-up-modal.hidden, .combo-banner-modal.hidden, .admin-modal.hidden {
+  display: none;
+}
+
+.level-up-box, .combo-burst-content {
+  background: radial-gradient(circle, #25103a, #0d0615);
+  border: 2px solid var(--neon-gold);
+  border-radius: 24px;
+  padding: 40px;
+  text-align: center;
+  box-shadow: 0 0 50px rgba(255, 190, 11, 0.5);
+  animation: modalZoom 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.level-up-title, .combo-burst-content h1 {
+  font-family: var(--font-title);
+  font-size: 28px;
+  color: var(--neon-gold);
+  margin-bottom: 12px;
+  text-shadow: 0 0 20px rgba(255, 190, 11, 0.8);
+}
+
+.level-badge-large {
+  font-family: var(--font-title);
+  font-size: 48px;
+  font-weight: 900;
+  color: var(--neon-cyan);
+  margin: 16px 0;
+  text-shadow: 0 0 20px rgba(0, 242, 254, 0.7);
+}
+
+.level-rewards-list {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 24px;
+  line-height: 1.8;
+}
+
+.btn-gold {
+  background: linear-gradient(135deg, var(--neon-gold), #e09f00);
+  color: #000;
+  font-family: var(--font-title);
+  font-weight: 900;
+  border: none;
+  padding: 12px 28px;
+  border-radius: 30px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+.btn-gold:hover { transform: scale(1.05); }
+
+/* Bảng Admin */
+.admin-modal-box {
+  background: #111422;
+  border: 2px solid var(--neon-cyan);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 820px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 12px;
+}
+
+.btn-close {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 26px;
+  cursor: pointer;
+}
+
+.admin-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 12px 0;
+}
+
+.btn-small {
+  background: var(--neon-cyan);
+  color: #000;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-family: var(--font-title);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.table-wrap { overflow-y: auto; flex: 1; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.admin-table th, .admin-table td {
+  border: 1px solid var(--border-subtle);
+  padding: 10px;
+  text-align: left;
+}
+.admin-table th { background: #1a1e35; color: var(--neon-cyan); }
+
+@keyframes modalZoom {
+  from { transform: scale(0.7); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
