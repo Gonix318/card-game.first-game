@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cyber Card Legends - RPG Card Game & Global Arena</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 1. DẢI BĂNG BÁO ĐỘNG TOÀN SERVER (GLOBAL SERVER ALERT) -->
+  <div id="globalServerAlert" class="global-alert hidden">
+    <div class="alert-icon">⚡</div>
+    <div class="alert-text" id="alertMessage">CHẤN ĐỘNG MÁY CHỦ: Người chơi vừa đạt được kỳ tích!</div>
+  </div>
+
+  <!-- NÚT BÍ MẬT MỞ BẢNG QUẢN TRỊ ADMIN -->
+  <button id="adminToggleBtn" class="btn-admin-secret" title="Quản trị MockAPI" onclick="openAdminModal()">👑</button>
+
+  <!-- 2. THANH HUD CHỈ SỐ TÀI KHOẢN (TOP HUD) -->
+  <header class="top-hud">
+    <!-- Cấp Độ & Tiến Trình Người Chơi -->
+    <div class="user-profile">
+      <div class="avatar-frame" id="playerBadgeFrame">
+        <span id="playerAvatar">⚔️</span>
+      </div>
+      <div class="user-details">
+        <div class="name-badge">
+          <span id="playerDisplayName">Tân Thủ Vô Danh</span>
+          <span class="level-tag" id="playerLevelTag">Lv.1</span>
+        </div>
+        <div class="exp-bar-wrap" title="Kinh nghiệm người chơi">
+          <div class="exp-bar-fill" id="expFill" style="width: 0%;"></div>
+          <span class="exp-text" id="expText">0/175 EXP</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hệ Thống 5 Loại Tài Nguyên -->
+    <div class="currency-group">
+      <!-- Vàng -->
+      <div class="currency-badge gold-badge" title="Vàng (Quay Gacha)">
+        <span class="cur-icon">🪙</span>
+        <span id="goldDisplay">1,000</span>
+      </div>
+      <!-- Tinh Thạch -->
+      <div class="currency-badge gem-badge" title="Tinh Thạch (Mua Buff)">
+        <span class="cur-icon">💎</span>
+        <span id="gemDisplay">50</span>
+      </div>
+      <!-- Bụi Sao -->
+      <div class="currency-badge dust-badge" title="Bụi Sao (Nâng 0-5 Sao)">
+        <span class="cur-icon">🌟</span>
+        <span id="dustDisplay">100</span>
+      </div>
+      <!-- Đá Thức Tỉnh -->
+      <div class="currency-badge awaken-badge" title="Đá Thức Tỉnh (Lên 6 Sao)">
+        <span class="cur-icon">🔮</span>
+        <span id="awakenStoneDisplay">0</span>
+      </div>
+      <!-- Đá Tiến Hóa Tối Thượng -->
+      <div class="currency-badge mythic-badge" title="Đá Tiến Hóa Tối Thượng (Lên 7 Sao)">
+        <span class="cur-icon">💠</span>
+        <span id="mythicStoneDisplay">0</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- 3. THANH ĐIỀU HƯỚNG TỔNG (MAIN TABS) -->
+  <nav class="main-tabs">
+    <button class="nav-btn active" data-tab="arenaTab">⚔️ Đấu Trường Bot</button>
+    <button class="nav-btn" data-tab="bossTab">🐉 Săn Boss</button>
+    <button class="nav-btn" data-tab="gachaTab">🎴 Gacha Gói Thẻ</button>
+    <button class="nav-btn" data-tab="forgeTab">⚒️ Lò Rèn Sao</button>
+    <button class="nav-btn" data-tab="deckTab">🎒 Kho Thẻ (<span id="totalCardsCount">0</span>/500)</button>
+    <button class="nav-btn" data-tab="buffShopTab">⚡ Kho Buff</button>
+    <button class="nav-btn" data-tab="minigameTab">🎮 Cày Vàng</button>
+  </nav>
+
+  <!-- 4. VÙNG VIEWPORT NỘI DUNG CHÍNH -->
+  <main class="content-viewport">
+
+    <!-- ==================== TAB 1: ĐẤU TRƯỜNG BOT (5 CẤP) ==================== -->
+    <section id="arenaTab" class="tab-pane active">
+      <!-- MÀN HÌNH CHỌN BOT -->
+      <div id="botSelectView" class="arena-select-view">
+        <h2 class="section-title">ĐẤU TRƯỜNG PVE - 5 CẤP ĐỘ CHIẾN BINH</h2>
+        <p class="section-subtitle">Đội hình 5 Tiên Phong + 2 Dự Bị. Tốc độ cao xả liên hoàn 1 - 8 nhát!</p>
+
+        <div class="bot-grid">
+          <!-- Bot 1: Tân Thủ -->
+          <div class="bot-card" data-bot="1">
+            <div class="bot-rank-tag wood">CẤP 1: TÂN THỦ</div>
+            <div class="bot-avatar">🤖</div>
+            <h3 class="bot-name">Bù Nhìn Gỗ Tập Sự</h3>
+            <p class="bot-desc">Thẻ Rank C (0 sao). Đánh đơn mục tiêu.</p>
+            <div class="reward-preview">Thưởng: 🪙 +80 | 🌟 +35 EXP</div>
+            <button class="btn-battle" onclick="startBattle(1)">KHIÊU CHIẾN</button>
+          </div>
+
+          <!-- Bot 2: Người Mới -->
+          <div class="bot-card" data-bot="2">
+            <div class="bot-rank-tag bronze">CẤP 2: NGƯỜI MỚI</div>
+            <div class="bot-avatar">👾</div>
+            <h3 class="bot-name">Gác Cổng Hầm Ngục</h3>
+            <p class="bot-desc">Rank C/B (1-2 sao). Biết dồn sát thương.</p>
+            <div class="reward-preview">Thưởng: 🪙 +200 | 🌟 +80 EXP</div>
+            <button class="btn-battle" onclick="startBattle(2)">KHIÊU CHIẾN</button>
+          </div>
+
+          <!-- Bot 3: Chuyên Nghiệp -->
+          <div class="bot-card" data-bot="3">
+            <div class="bot-rank-tag silver">CẤP 3: CHUYÊN NGHIỆP</div>
+            <div class="bot-avatar">🥷</div>
+            <h3 class="bot-name">Ninja Hắc Ám</h3>
+            <p class="bot-desc">Rank B/A (3-4 sao). Đánh lan 2-3 mục tiêu.</p>
+            <div class="reward-preview">Thưởng: 🪙 +450 | 💎 +5 | 🌟 +200 EXP</div>
+            <button class="btn-battle" onclick="startBattle(3)">KHIÊU CHIẾN</button>
+          </div>
+
+          <!-- Bot 4: Cao Thủ -->
+          <div class="bot-card" data-bot="4">
+            <div class="bot-rank-tag gold">CẤP 4: CAO THỦ</div>
+            <div class="bot-avatar">🐉</div>
+            <h3 class="bot-name">Long Tướng Trảm Hồn</h3>
+            <p class="bot-desc">Full Rank A/S (5 sao). Tốc độ cao, combo rát.</p>
+            <div class="reward-preview">Thưởng: 🪙 +1,000 | 💎 +15 | 🌟 +500 EXP</div>
+            <button class="btn-battle" onclick="startBattle(4)">KHIÊU CHIẾN</button>
+          </div>
+
+          <!-- Bot 5: Đại Cao Thủ (Boss Sàn Đấu) -->
+          <div class="bot-card boss" data-bot="5">
+            <div class="bot-rank-tag mythic">CẤP 5: ĐẠI CAO THỦ</div>
+            <div class="bot-avatar">👑</div>
+            <h3 class="bot-name">Ma Thần Hư Không</h3>
+            <p class="bot-desc">Toàn bộ Rank S 6-7 sao. Có tỉ lệ cầm SSS 7 sao!</p>
+            <div class="reward-preview">Thưởng: 🪙 +3,000 | 💎 +50 | 🌟 +1,500 EXP</div>
+            <button class="btn-battle" onclick="startBattle(5)">QUYẾT CHIẾN</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SÀN ĐẤU CHIẾN THUẬT (BATTLEFIELD) -->
+      <div id="battleArenaView" class="battle-stage hidden">
+        <!-- Đỉnh: Khu Vực 5 Thẻ Phe Địch (Bot) -->
+        <div class="team-side bot-team">
+          <div class="team-header">
+            <h4 id="arenaEnemyName">ĐỘI HÌNH ĐỐI PHƯƠNG</h4>
+            <span class="sub-counter" id="botSubCount">Dự bị: 2/2</span>
+          </div>
+          <div class="field-slots-row" id="botFieldSlots">
+            <!-- 5 Thẻ Bot Trên Sân -->
+          </div>
+        </div>
+
+        <!-- Trung Tâm: Nhật Ký Đòn Đánh & Hiệu Ứng Sát Thương Multi-Hit -->
+        <div class="combat-log-zone">
+          <div id="combatLogText" class="combat-log">Trận đấu bắt đầu! Chọn 1 thẻ bên bạn để xuất kích.</div>
+          <div id="multiHitBurst" class="multi-hit-burst hidden">7 HITS COMBO!</div>
+        </div>
+
+        <!-- Đáy: Khu Vực Phe Ta (5 Chính Trên Sân) -->
+        <div class="team-side player-team">
+          <div class="team-header">
+            <h4>ĐỘI TIÊN PHONG CỦA BẠN (CHỌN 1 ĐỂ TẤN CÔNG)</h4>
+            <span class="turn-indicator" id="turnIndicator">LƯỢT CỦA BẠN</span>
+          </div>
+          <div class="field-slots-row" id="playerFieldSlots">
+            <!-- 5 Thẻ Ta Trên Sân -->
+          </div>
+        </div>
+
+        <!-- HÀNG GHẾ DỰ BỊ PHE TA (2 Ô ĐỔI NGƯỜI TỰ DO) -->
+        <div class="bench-zone">
+          <div class="bench-title">HÀNG GHẾ DỰ BỊ (Click đổi vào sân - Không tốn lượt đánh):</div>
+          <div class="bench-slots-row" id="playerBenchSlots">
+            <!-- 2 Thẻ Dự Bị -->
+          </div>
+        </div>
+
+        <!-- THANH BUFF CHIẾN THUẬT (CÓ VÒNG XOAY COOLDOWN) -->
+        <div class="inbattle-buff-panel">
+          <div class="buff-btn-box">
+            <button class="btn-buff" id="buffHealBtn" onclick="triggerBuff('HEAL')">
+              <span class="buff-icon">🩸</span>
+              <span class="buff-label">Hồi Máu</span>
+              <div class="cooldown-overlay hidden" id="cdOverlayHeal">
+                <span class="cd-number">25</span>
+              </div>
+            </button>
+          </div>
+
+          <div class="buff-btn-box">
+            <button class="btn-buff" id="buffShieldBtn" onclick="triggerBuff('SHIELD')">
+              <span class="buff-icon">🛡️</span>
+              <span class="buff-label">Khiên Thần</span>
+              <div class="cooldown-overlay hidden" id="cdOverlayShield">
+                <span class="cd-number">35</span>
+              </div>
+            </button>
+          </div>
+
+          <div class="buff-btn-box">
+            <button class="btn-buff" id="buffAtkBtn" onclick="triggerBuff('OVERLOAD')">
+              <span class="buff-icon">⚡</span>
+              <span class="buff-label">Bạo Kích</span>
+              <div class="cooldown-overlay hidden" id="cdOverlayAtk">
+                <span class="cd-number">20</span>
+              </div>
+            </button>
+          </div>
+
+          <div class="buff-btn-box">
+            <button class="btn-buff" id="buffSpeedBtn" onclick="triggerBuff('HASTE')">
+              <span class="buff-icon">🌪️</span>
+              <span class="buff-label">Thần Tốc</span>
+              <div class="cooldown-overlay hidden" id="cdOverlaySpeed">
+                <span class="cd-number">30</span>
+              </div>
+            </button>
+          </div>
+
+          <button class="btn-surrender" onclick="surrenderBattle()">Đầu Hàng 🏳️</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 2: PHỤ BẢN SĂN BOSS (CÀY ĐÁ & BỤI SAO) ==================== -->
+    <section id="bossTab" class="tab-pane">
+      <h2 class="section-title">PHỤ BẢN SĂN BOSS THẾ GIỚI</h2>
+      <p class="section-subtitle">Khiêu chiến các đại thủ lĩnh viễn cổ để thu thập Bụi Sao và Đá Tiến Hóa 6⭐ - 7⭐</p>
+
+      <div class="boss-grid">
+        <!-- Boss 1: Săn Bụi Sao -->
+        <div class="boss-card">
+          <div class="boss-icon">🐺</div>
+          <h3>Ma Thú Rừng Thiêng</h3>
+          <p>Boss Cổ Thụ, sinh lực dồi dào, kháng hiệu ứng.</p>
+          <div class="boss-drop-preview">Rơi: 🌟 200 - 500 Bụi Sao</div>
+          <button class="btn-battle" onclick="startBossRaid('DUST_BOSS')">KHIÊU CHIẾN (Lv.8+)</button>
+        </div>
+
+        <!-- Boss 2: Săn Đá Thức Tỉnh (Lên 6 Sao) -->
+        <div class="boss-card epic-boss">
+          <div class="boss-icon">🔮</div>
+          <h3>Bóng Ma Hư Vô</h3>
+          <p>Boss Không Gian, có chiêu thức hút máu và né đòn liên tục.</p>
+          <div class="boss-drop-preview">Rơi: 🔮 2 - 5 Đá Thức Tỉnh (6⭐)</div>
+          <button class="btn-battle" onclick="startBossRaid('AWAKEN_BOSS')">KHIÊU CHIẾN (Lv.12+)</button>
+        </div>
+
+        <!-- Boss 3: Săn Đá Tiến Hóa Tối Thượng (Lên 7 Sao) -->
+        <div class="boss-card mythic-boss">
+          <div class="boss-icon">🐉</div>
+          <h3>Hắc Long Khởi Nguyên</h3>
+          <p>Chúa tể diệt vong. Đòn quét toàn sân cực mạnh, máu nhiều lớp.</p>
+          <div class="boss-drop-preview">Rơi: 💠 1 - 2 Đá Tối Thượng (7⭐)</div>
+          <button class="btn-battle" onclick="startBossRaid('MYTHIC_BOSS')">KHIÊU CHIẾN (Lv.15+)</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 3: GACHA GÓI THẺ (ĐỒNG, BẠC, VÀNG, KIM CƯƠNG) ==================== -->
+    <section id="gachaTab" class="tab-pane">
+      <div id="gachaStoreView">
+        <h2 class="section-title">CỬA HÀNG GÓI THẺ GACHA</h2>
+        <p class="section-subtitle">Tùy chọn phẩm cấp gói (Đồng $\rightarrow$ Kim Cương) và số lượng bóc (3, 5, 10, 25 lá)</p>
+
+        <!-- Bộ chọn số lá -->
+        <div class="pack-size-selector">
+          <span class="selector-label">Chọn số lượng thẻ trong gói:</span>
+          <div class="size-buttons">
+            <button class="btn-size active" data-size="3" onclick="setPackSize(3)">3 Lá</button>
+            <button class="btn-size" data-size="5" onclick="setPackSize(5)">5 Lá</button>
+            <button class="btn-size" data-size="10" onclick="setPackSize(10)">10 Lá</button>
+            <button class="btn-size" data-size="25" onclick="setPackSize(25)">Mega 25 Lá</button>
+          </div>
+        </div>
+
+        <!-- 4 Phẩm Cấp Gói Thẻ -->
+        <div class="pack-grid">
+          <!-- Gói Đồng -->
+          <div class="pack-item pack-bronze">
+            <div class="pack-foil">
+              <span class="pack-badge">PHẨM ĐỒNG</span>
+              <div class="pack-art">📦</div>
+              <h3>Gói Tân Binh</h3>
+              <p>Chỉ ra Thường (C: 85%) và Hiếm (B: 15%). Khóa hoàn toàn Rank A, S, SSS.</p>
+              <div class="pack-rate-tag">C: 85% | B: 15% | A/S/SSS: 0%</div>
+            </div>
+            <button class="btn-buy-pack" id="btnBuyBronze" onclick="buyGachaPack('BRONZE')">MỞ (150 🪙)</button>
+          </div>
+
+          <!-- Gói Bạc -->
+          <div class="pack-item pack-silver">
+            <div class="pack-foil">
+              <span class="pack-badge">PHẨM BẠC</span>
+              <div class="pack-art">💼</div>
+              <h3>Gói Tinh Anh</h3>
+              <p>Mở khóa Rank A (9.5%) và cơ hội nhỏ Rank S (0.5%). Khóa SSS.</p>
+              <div class="pack-rate-tag">C: 55% | B: 35% | A: 9.5% | S: 0.5%</div>
+            </div>
+            <button class="btn-buy-pack" id="btnBuySilver" onclick="buyGachaPack('SILVER')">MỞ (450 🪙)</button>
+          </div>
+
+          <!-- Gói Vàng -->
+          <div class="pack-item pack-gold">
+            <div class="pack-foil">
+              <span class="pack-badge">PHẨM VÀNG</span>
+              <div class="pack-art">👑</div>
+              <h3>Gói Hoàng Kim</h3>
+              <p>Hiếm & Sử Thi áp đảo. Bắt đầu có cơ hội 1% thức tỉnh SSS Thần Thoại!</p>
+              <div class="pack-rate-tag">C: 25% | B: 45% | A: 23% | S: 6% | SSS: 1%</div>
+            </div>
+            <button class="btn-buy-pack" id="btnBuyGold" onclick="buyGachaPack('GOLD')">MỞ (1,200 🪙)</button>
+          </div>
+
+          <!-- Gói Kim Cương -->
+          <div class="pack-item pack-diamond">
+            <div class="pack-foil">
+              <span class="pack-badge">KIM CƯƠNG (MAX)</span>
+              <div class="pack-art">🌌</div>
+              <h3>Gói Thần Thánh</h3>
+              <p>Tỷ lệ Rank xịn cao nhất. Rank SSS chạm mốc 10%, tràn ngập thẻ A và S!</p>
+              <div class="pack-rate-tag">A: 40% | S: 20% | SSS: 10% | B: 25% | C: 5%</div>
+            </div>
+            <button class="btn-buy-pack" id="btnBuyDiamond" onclick="buyGachaPack('DIAMOND')">MỞ (3,500 🪙)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MÀN HÌNH BÓC & LẬT THẺ 3D (REVEAL VIEW) -->
+      <div id="gachaRevealView" class="gacha-reveal-container hidden">
+        <div class="reveal-header">
+          <h3 id="revealTitle">ĐANG BÓC GÓI THẺ BÀI...</h3>
+          <button id="skipRevealBtn" class="btn-skip-reveal" onclick="skipPackReveal()">MỞ NHANH TẤT CẢ (SKIP) ⚡</button>
+        </div>
+
+        <div class="cards-reveal-grid" id="cardsRevealGrid">
+          <!-- Render danh sách thẻ 3D lật mở tại đây -->
+        </div>
+
+        <button id="closeRevealBtn" class="btn-gold hidden" onclick="finishPackOpening()">HOÀN TẤT & THU THẬP BỘ SƯU TẬP</button>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 4: LÒ RÈN NÂNG SAO & TIẾN HÓA (0⭐ -> 7⭐) ==================== -->
+    <section id="forgeTab" class="tab-pane">
+      <h2 class="section-title">LÒ RÈN THỨC TỈNH & NÂNG CẤP SAO</h2>
+      <p class="section-subtitle">Dùng Thẻ Trùng Rank + Bụi Sao / Đá Tiến Hóa để nâng lên 5⭐ (thường) và 7⭐ (S/SSS)</p>
+
+      <div class="forge-container">
+        <!-- Cột Trái: Chọn thẻ muốn nâng -->
+        <div class="forge-target-card" id="forgeTargetBox">
+          <div class="forge-empty-prompt">Chọn một thẻ từ danh sách bên phải để đưa vào Lò Rèn</div>
+        </div>
+
+        <!-- Cột Phải: Điều kiện & Nút Nâng Cấp -->
+        <div class="forge-upgrade-panel">
+          <h3 id="forgeUpgradeTitle">YÊU CẦU NÂNG CẤP</h3>
+          <div class="requirements-box" id="forgeRequirements">
+            <div class="req-item" id="reqFodder">🔹 Thẻ phôi cùng Rank: <b>- / -</b></div>
+            <div class="req-item" id="reqDust">🌟 Bụi Sao: <b>- / -</b></div>
+            <div class="req-item" id="reqStone">🔮 Đá Thức Tỉnh / Tối Thượng: <b>- / -</b></div>
+          </div>
+          <div class="stat-boost-preview" id="forgeStatPreview">
+            <span>Chỉ số sau nâng: +15% ATK, +15% HP</span>
+          </div>
+          <button id="btnExecuteUpgrade" class="btn-gold" disabled onclick="executeCardUpgrade()">TIẾN HÀNH NÂNG SAO ⭐</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 5: KHO THẺ & ĐỘI HÌNH (5 CHÍNH + 2 DỰ BỊ) ==================== -->
+    <section id="deckTab" class="tab-pane">
+      <h2 class="section-title">QUẢN LÝ BỘ BÀI VÀ ĐỘI HÌNH RA TRẬN</h2>
+      <p class="section-subtitle">Xếp 5 thẻ Tiên Phong và 2 thẻ Dự Bị để chiến đấu trong Đấu Trường</p>
+
+      <!-- Khung Đội Hình 7 Người Hiện Tại -->
+      <div class="active-formation-panel">
+        <div class="formation-section">
+          <h4>TIÊN PHONG RA TRẬN (5 THẺ)</h4>
+          <div class="deck-row main-formation" id="deckMainRow"></div>
+        </div>
+        <div class="formation-section">
+          <h4>HÀNG GHẾ DỰ BỊ (2 THẺ)</h4>
+          <div class="deck-row sub-formation" id="deckSubRow"></div>
+        </div>
+      </div>
+
+      <!-- Bộ lọc thẻ trong túi -->
+      <div class="filter-bar">
+        <button class="filter-btn active" onclick="filterCards('ALL')">Tất Cả</button>
+        <button class="filter-btn" onclick="filterCards('SSS')">SSS (Kỳ Tích)</button>
+        <button class="filter-btn" onclick="filterCards('S')">S (Huyền Thoại)</button>
+        <button class="filter-btn" onclick="filterCards('A')">A (Sử Thi)</button>
+        <button class="filter-btn" onclick="filterCards('B')">B (Hiếm)</button>
+        <button class="filter-btn" onclick="filterCards('C')">C (Thường)</button>
+      </div>
+
+      <div class="collection-grid" id="collectionGrid">
+        <!-- Render 500 lá thẻ người chơi sở hữu -->
+      </div>
+    </section>
+
+    <!-- ==================== TAB 6: KHO BUFF CHIẾN THUẬT ==================== -->
+    <section id="buffShopTab" class="tab-pane">
+      <h2 class="section-title">CỬA HÀNG KỸ NĂNG BUFF CHIẾN THUẬT</h2>
+      <p class="section-subtitle">Mua bằng Tinh Thạch 💎 - Kích hoạt tức thì giữa trận đấu (Chống spam bằng Cooldown)</p>
+
+      <div class="buff-shop-grid">
+        <div class="buff-item-card">
+          <div class="buff-card-icon">🩸</div>
+          <h3>Huyết Dược Khẩn Cấp</h3>
+          <p>Hồi ngay <b>35% Max HP</b> cho thẻ đang chỉ định.</p>
+          <div class="buff-meta">Hồi chiêu: 25s</div>
+          <div class="buff-owned">Đang có: <b id="countBuffHeal">3</b></div>
+          <button class="btn-buy-buff" onclick="buyBuff('HEAL', 15)">Mua (15 💎)</button>
+        </div>
+
+        <div class="buff-item-card">
+          <div class="buff-card-icon">🛡️</div>
+          <h3>Khiên Hộ Thể Bất Diệt</h3>
+          <p>Chặn <b>100% sát thương</b> từ đòn đánh kế tiếp của đối thủ.</p>
+          <div class="buff-meta">Hồi chiêu: 35s</div>
+          <div class="buff-owned">Đang có: <b id="countBuffShield">2</b></div>
+          <button class="btn-buy-buff" onclick="buyBuff('SHIELD', 25)">Mua (25 💎)</button>
+        </div>
+
+        <div class="buff-item-card">
+          <div class="buff-card-icon">⚡</div>
+          <h3>Lôi Thần Kích (Bạo Kích)</h3>
+          <p>Tăng <b>60% lực chiến (ATK)</b> cho lượt tấn công hiện tại.</p>
+          <div class="buff-meta">Hồi chiêu: 20s</div>
+          <div class="buff-owned">Đang có: <b id="countBuffAtk">4</b></div>
+          <button class="btn-buy-buff" onclick="buyBuff('OVERLOAD', 20)">Mua (20 💎)</button>
+        </div>
+
+        <div class="buff-item-card">
+          <div class="buff-card-icon">🌪️</div>
+          <h3>Thần Tốc Vũ Bão</h3>
+          <p>Tăng <b>100% chỉ số Tốc Độ (SPD)</b> để xả tối đa 8 cú chém Multi-hit.</p>
+          <div class="buff-meta">Hồi chiêu: 30s</div>
+          <div class="buff-owned">Đang có: <b id="countBuffSpeed">2</b></div>
+          <button class="btn-buy-buff" onclick="buyBuff('HASTE', 30)">Mua (30 💎)</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== TAB 7: MINIGAME CÀY VÀNG ==================== -->
+    <section id="minigameTab" class="tab-pane">
+      <h2 class="section-title">MINIGAME BẤM NHỊP CÀY VÀNG</h2>
+      <p class="section-subtitle">Chạm nhanh vào các khối tinh thể năng lượng để tích lũy Vàng cày Gacha</p>
+
+      <div class="minigame-arena">
+        <div class="minigame-stats">
+          <span>Điểm: <b id="minigameScore">0</b></span>
+          <span>Thời gian: <b id="minigameTimer">30s</b></span>
+          <span>Vàng thu được: <b id="minigameGoldEarned">0</b> 🪙</span>
+        </div>
+        <div class="target-field" id="minigameField">
+          <button id="startMinigameBtn" class="btn-gold" onclick="startMinigame()">BẮT ĐẦU CÀY TIỀN 🪙</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== 5. CÁC MODAL THÔNG BÁO VÀ HỆ THỐNG ==================== -->
+
+  <!-- POPUP LÊN CẤP TÀI KHOẢN (LEVEL UP POPUP) -->
+  <div id="levelUpModal" class="level-up-modal hidden">
+    <div class="level-up-box">
+      <div class="level-up-shine"></div>
+      <h1 class="level-up-title">THĂNG CẤP TÀI KHOẢN!</h1>
+      <div class="level-badge-large" id="modalNewLevel">Lv.2</div>
+      <div class="level-rewards-list" id="modalLevelRewards">
+        <div>🪙 +500 Vàng</div>
+        <div>💎 +20 Tinh Thạch</div>
+        <div>🌟 +100 Bụi Sao</div>
+      </div>
+      <button class="btn-gold" onclick="closeLevelUpModal()">NHẬN THƯỞNG ⚡</button>
+    </div>
+  </div>
+
+  <!-- BANNER ĂN MỪNG COMBO ĐỒNG RANK (3, 5, 7, 10, 10-SSS) -->
+  <div id="comboBannerModal" class="combo-banner-modal hidden">
+    <div class="combo-burst-content" id="comboContentBox">
+      <h1 id="comboTitle">TAM HOA TỤ ĐỈNH</h1>
+      <p id="comboSub">3 Thẻ Cùng Rank Xuất Thế!</p>
+      <button class="btn-gold" onclick="closeComboBanner()">TIẾP TỤC ⚡</button>
+    </div>
+  </div>
+
+  <!-- BẢNG QUẢN TRỊ ADMIN MOCKAPI -->
+  <div id="adminModal" class="admin-modal hidden">
+    <div class="admin-modal-box">
+      <div class="modal-head">
+        <h3>👑 QUẢN TRỊ VIÊN - DỮ LIỆU ĐỒNG BỘ MOCKAPI</h3>
+        <button class="btn-close" onclick="closeAdminModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="admin-actions">
+          <button class="btn-small" onclick="fetchAdminData()">Tải lại máy chủ 🔄</button>
+          <span id="adminDataCount">Tổng người chơi: 0</span>
+        </div>
+        <div class="table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Người Chơi</th>
+                <th>Cấp</th>
+                <th>Vàng / Gems</th>
+                <th>Thẻ SSS Sở Hữu</th>
+                <th>Thẻ 7⭐</th>
+                <th>Hạ Boss?</th>
+              </tr>
+            </thead>
+            <tbody id="adminTableBody">
+              <!-- Render danh sách dữ liệu từ MockAPI -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NẠP
