@@ -1,5 +1,5 @@
 /* ==========================================================================
-   CARDS DATA & BALANCE SYSTEM - 500 CARDS CYBER CARD LEGENDS
+   CARDS DATA & BALANCE SYSTEM - 500 CARDS CYBER CARD LEGENDS (UPDATED)
    ========================================================================== */
 
 // 1. HỆ NGUYÊN TỐ & QUY TẮC KHẮC CHẾ (TĂNG 30% SÁT THƯƠNG KHI KHẮC HỆ)
@@ -67,7 +67,7 @@ function generate500Cards() {
         baseAtk: Math.max(20, tier.baseAtk + atkVariance),
         baseHp: Math.max(100, tier.baseHp + hpVariance),
         baseSpd: Math.max(50, tier.baseSpd + spdVariance),
-        targetType: targetMode, // SINGLE, CLEAVE (2-3), AOE (5)
+        targetType: targetMode,
         stars: 0,
         unlockedSkill: tier.rank === 'SSS' ? 'Tuyệt Kỹ Thần Thoại' : (tier.rank === 'S' ? 'Khí Hồn Huyền Thoại' : 'Đòn Cơ Bản')
       });
@@ -83,8 +83,6 @@ function generate500Cards() {
 const ALL_500_CARDS = generate500Cards();
 
 // 4. MA TRẬN TỶ LỆ BÓC GÓI GACHA (4 PHẨM CẤP GÓI)
-// Đơn giá tính theo 1 lá bài cho từng phẩm cấp:
-// Đồng: 50 vàng/lá | Bạc: 90 vàng/lá | Vàng: 120 vàng/lá | Kim Cương: 140 vàng/lá
 const GACHA_PACK_TIERS = {
   BRONZE: {
     name: 'Gói Tân Binh (Đồng)',
@@ -104,11 +102,32 @@ const GACHA_PACK_TIERS = {
   DIAMOND: {
     name: 'Gói Thần Thánh (Kim Cương)',
     costPerCard: 140,
-    rates: { C: 0.05, B: 0.25, A: 0.40, S: 0.20, SSS: 0.10 } // SSS tối đa đúng 10%
+    rates: { C: 0.05, B: 0.25, A: 0.40, S: 0.20, SSS: 0.10 }
   }
 };
 
-// 5. CẤU HÌNH 5 CẤP ĐỘ BOT ĐẤU TRƯỜNG PVE (5 CHÍNH + 2 DỰ BỊ = 7 THẺ)
+// 5. GIÁ TRỊ PHÂN TÁCH THẺ THÀNH BỤI SAO (CARD SCRAP SYSTEM)
+const CARD_SCRAP_VALUES = {
+  C:   { normalDust: 15,   superDust: 0 },
+  B:   { normalDust: 40,   superDust: 0 },
+  A:   { normalDust: 120,  superDust: 0 },
+  S:   { normalDust: 400,  superDust: 1 },
+  SSS: { normalDust: 1500, superDust: 5 }
+};
+
+// 6. CÔNG THỨC & ĐIỀU KIỆN NÂNG SAO (CHỈ DÙNG BỤI SAO & BỤI SIÊU CẤP, KHÔNG CẦN PHÔI THẺ)
+// Mỗi sao tăng +15% ATK và +15% HP cơ bản
+const STAR_UPGRADE_REQUIREMENTS = {
+  1: { normalDust: 100,   superDust: 0,  stone: 0, requiresRanks: ['C', 'B', 'A', 'S', 'SSS'] },
+  2: { normalDust: 250,   superDust: 0,  stone: 0, requiresRanks: ['C', 'B', 'A', 'S', 'SSS'] },
+  3: { normalDust: 500,   superDust: 0,  stone: 0, requiresRanks: ['C', 'B', 'A', 'S', 'SSS'] },
+  4: { normalDust: 900,   superDust: 0,  stone: 0, requiresRanks: ['C', 'B', 'A', 'S', 'SSS'] },
+  5: { normalDust: 1500,  superDust: 0,  stone: 0, requiresRanks: ['C', 'B', 'A', 'S', 'SSS'] }, // Cực hạn của C, B, A
+  6: { normalDust: 5000,  superDust: 10, stone: 0, requiresRanks: ['S', 'SSS'] },                 // Cần Bụi Siêu Cấp
+  7: { normalDust: 12000, superDust: 25, stone: 0, requiresRanks: ['S', 'SSS'] }                  // Cực hạn Thần Thoại
+};
+
+// 7. CẤU HÌNH 5 CẤP ĐỘ BOT ĐẤU TRƯỜNG PVE
 const BOT_LEVELS_CONFIG = {
   1: {
     level: 1,
@@ -116,7 +135,8 @@ const BOT_LEVELS_CONFIG = {
     avatar: '🤖',
     cardRanks: ['C'],
     starRange: [0, 0],
-    rewards: { gold: 80, exp: 35, gems: 0, dust: 10 },
+    subSlots: 2,
+    rewards: { gold: 80, exp: 35, gems: 0, dust: 15 },
     hasSSSChance: false
   },
   2: {
@@ -125,7 +145,8 @@ const BOT_LEVELS_CONFIG = {
     avatar: '👾',
     cardRanks: ['C', 'B'],
     starRange: [1, 2],
-    rewards: { gold: 200, exp: 80, gems: 2, dust: 25 },
+    subSlots: 3,
+    rewards: { gold: 200, exp: 80, gems: 2, dust: 35 },
     hasSSSChance: false
   },
   3: {
@@ -134,7 +155,8 @@ const BOT_LEVELS_CONFIG = {
     avatar: '🥷',
     cardRanks: ['B', 'A'],
     starRange: [3, 4],
-    rewards: { gold: 450, exp: 200, gems: 5, dust: 60 },
+    subSlots: 5,
+    rewards: { gold: 450, exp: 200, gems: 5, dust: 80 },
     hasSSSChance: false
   },
   4: {
@@ -143,7 +165,8 @@ const BOT_LEVELS_CONFIG = {
     avatar: '🐉',
     cardRanks: ['A', 'S'],
     starRange: [4, 5],
-    rewards: { gold: 1000, exp: 500, gems: 15, dust: 150 },
+    subSlots: 7,
+    rewards: { gold: 1000, exp: 500, gems: 15, dust: 200 },
     hasSSSChance: false
   },
   5: {
@@ -152,13 +175,14 @@ const BOT_LEVELS_CONFIG = {
     avatar: '👑',
     cardRanks: ['S'],
     starRange: [5, 6],
-    rewards: { gold: 3000, exp: 1500, gems: 50, dust: 400, awakenStone: 2, mythicStone: 1 },
-    hasSSSChance: true, // 15% xác suất có 1 thẻ SSS 7 sao trong đội hình
+    subSlots: 10,
+    rewards: { gold: 3000, exp: 1500, gems: 50, dust: 500, superDust: 2, awakenStone: 2, mythicStone: 1 },
+    hasSSSChance: true,
     sssChanceRate: 0.15
   }
 };
 
-// 6. CẤU HÌNH 3 PHỤ BẢN BOSS CÀY NGUYÊN LIỆU TIẾN HÓA
+// 8. CẤU HÌNH 3 PHỤ BẢN BOSS CÀY NGUYÊN LIỆU & BỤI SIÊU CẤP
 const BOSS_RAIDS_CONFIG = {
   DUST_BOSS: {
     id: 'DUST_BOSS',
@@ -169,7 +193,7 @@ const BOSS_RAIDS_CONFIG = {
     atk: 140,
     spd: 85,
     element: 'ICE',
-    rewards: { dustMin: 200, dustMax: 500, exp: 600, gold: 800 }
+    rewards: { dustMin: 200, dustMax: 500, superDustMin: 0, superDustMax: 0, exp: 600, gold: 800 }
   },
   AWAKEN_BOSS: {
     id: 'AWAKEN_BOSS',
@@ -180,7 +204,7 @@ const BOSS_RAIDS_CONFIG = {
     atk: 280,
     spd: 110,
     element: 'DARK',
-    rewards: { awakenStoneMin: 2, awakenStoneMax: 5, dustMin: 500, exp: 1400, gold: 2000 }
+    rewards: { awakenStoneMin: 2, awakenStoneMax: 5, superDustMin: 1, superDustMax: 3, dustMin: 500, exp: 1400, gold: 2000 }
   },
   MYTHIC_BOSS: {
     id: 'MYTHIC_BOSS',
@@ -191,50 +215,38 @@ const BOSS_RAIDS_CONFIG = {
     atk: 480,
     spd: 140,
     element: 'FIRE',
-    rewards: { mythicStoneMin: 1, mythicStoneMax: 2, awakenStoneMin: 5, dustMin: 1200, exp: 3500, gold: 5000 }
+    rewards: { mythicStoneMin: 1, mythicStoneMax: 2, superDustMin: 3, superDustMax: 6, awakenStoneMin: 5, dustMin: 1200, exp: 3500, gold: 5000 }
   }
 };
 
-// 7. CÔNG THỨC VÀ ĐIỀU KIỆN LÒ RÈN NÂNG SAO (0⭐ -> 7⭐)
-// Mỗi sao tăng +15% ATK và +15% HP cơ bản
-const STAR_UPGRADE_REQUIREMENTS = {
-  1: { fodderSameRankCount: 1, dust: 50,   awakenStone: 0,  mythicStone: 0 },
-  2: { fodderSameRankCount: 2, dust: 150,  awakenStone: 0,  mythicStone: 0 },
-  3: { fodderSameRankCount: 3, dust: 300,  awakenStone: 0,  mythicStone: 0 },
-  4: { fodderSameRankCount: 4, dust: 600,  awakenStone: 0,  mythicStone: 0 },
-  5: { fodderSameRankCount: 5, dust: 1200, awakenStone: 0,  mythicStone: 0 }, // Giới hạn của Rank C, B, A
-  6: { fodderSameRankCount: 3, dust: 2500, awakenStone: 10, mythicStone: 0, requiresRanks: ['S', 'SSS'] },
-  7: { fodderSameRankCount: 5, dust: 5000, awakenStone: 20, mythicStone: 5, requiresRanks: ['S', 'SSS'] }
-};
-
-// 8. KỸ NĂNG BUFF TRONG TRẬN ĐẤU & COOLDOWN (GIÂY)
+// 9. KỸ NĂNG BUFF TRONG TRẬN ĐẤU & COOLDOWN (GIÂY)
 const BATTLE_BUFFS = {
   HEAL: {
     id: 'HEAL',
     name: 'Huyết Dược Khẩn Cấp',
     cooldownSec: 25,
     effectType: 'HEAL_PERCENT',
-    value: 0.35 // Hồi 35% Max HP
+    value: 0.35
   },
   SHIELD: {
     id: 'SHIELD',
     name: 'Khiên Hộ Thể Bất Diệt',
     cooldownSec: 35,
     effectType: 'IMMUNE_NEXT_HIT',
-    value: 1 // Chặn hoàn toàn 1 đòn đánh kế tiếp
+    value: 1
   },
   OVERLOAD: {
     id: 'OVERLOAD',
     name: 'Lôi Thần Kích (Bạo Kích)',
     cooldownSec: 20,
     effectType: 'ATK_BOOST_PERCENT',
-    value: 0.60 // Tăng 60% ATK ở đòn đánh hiện tại
+    value: 0.60
   },
   HASTE: {
     id: 'HASTE',
     name: 'Thần Tốc Vũ Bão',
     cooldownSec: 30,
     effectType: 'SPEED_BOOST_PERCENT',
-    value: 1.00 // Tăng 100% SPD giúp xả tối đa 8 cú chém Multi-hit
+    value: 1.00
   }
 };
