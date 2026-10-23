@@ -1,1501 +1,1486 @@
 /* ==========================================================================
-   GAME ENGINE - CORE LOGIC, AUTO-DEPLOY & DRAG-DROP CYBER CARD LEGENDS
+   GAME ENGINE - PVE OVR SYSTEM, SMART BOT AI & EVENT COMBAT
    ========================================================================== */
 
-// 1. TRẠNG THÁI TOÀN CỤC CỦA NGƯỜI CHƠI (PLAYER STATE)
-const gameState = {
+// TRẠNG THÁI TOÀN CỤC CỦA NGƯỜI CHƠI
+let gameState = {
   player: {
-    name: 'Tân Thủ Cyber',
+    name: 'Chiến Binh Cyber',
     level: 1,
     exp: 0,
-    maxExp: 175,
-    gold: 1500,
-    gems: 60,
-    dust: 150,
-    superDust: 0,
-    awakenStones: 0,
-    mythicStones: 0,
-    unlockedSSS: 0,
-    hasGodCard: false,
-    bossDefeated: false,
-    maxBenchSlots: 2 // Tối thiểu 2, nâng tối đa 10
-  },
-  inventory: [],
-  deck: {
-    main: [], // Tối đa 5 thẻ
-    sub: []   // Tối đa maxBenchSlots
-  },
-  buffsOwned: {
-    HEAL: 3,
-    SHIELD: 2,
-    OVERLOAD: 4,
-    HASTE: 2
-  },
-  buffCooldowns: {
-    HEAL: 0,
-    SHIELD: 0,
-    OVERLOAD: 0,
-    HASTE: 0
-  },
-  selectedPackSize: 3,
-  forgeSelectedInstanceId: null,
-  forgeFilterRank: 'ALL',
-
-  // Biến tạm cho thao tác kéo thả Drag & Drop
-  draggedCardData: null,
-
-  // Trạng thái trận đấu
-  battle: {
-    active: false,
-    isPlayerTurn: true,
-    attackerIndex: null,
-    activeBuffs: {
-      shield: false,
-      overload: false,
-      haste: false
+    gold: 5000,
+    gems: 50,
+    normalDust: 2000,
+    superDust: 10,
+    benchCapacity: 2,
+    buffInventory: { HEAL: 2, SHIELD: 1, OVERLOAD: 2, HASTE: 2 },
+    deck: {
+      main: [], // Tối đa 5 thẻ
+      sub: []   // Sức chứa từ 2 đến 10
     },
-    enemyType: null,
-    botLevel: 1,
-    bossConfig: null,
-    playerCombatTeam: [],
-    playerCombatBench: [],
-    enemyCombatTeam: [],
-    enemyCombatBench: []
-  }
+    inventory: []
+  },
+  currentTab: 'arenaTab',
+  selectedForgeCardUniqueId: null,
+  activeFilterRank: 'ALL',
+  activeForgeFilterRank: 'ALL',
+  gachaPackSize: 25,
+  minigameActive: false,
+  combat: null
 };
 
-// ==================== 2. KHỞI CHẠY & NẠP DỮ LIỆU LOCAL ====================
-window.addEventListener('DOMContentLoaded', () => {
-  loadLocalGameData();
-  setupTabsNavigation();
-  initStarterCardsIfEmpty();
-  renderTopHUD();
-  renderFormationDeck();
-  renderCollection();
-  renderForgeCardList();
-  startCooldownTimerLoop();
-});
+// CÔNG THỨC TÍNH CHIẾN LỰC (CP)
+function calculateCardCP(card) {
+  const starMultiplier = 1 + (card.stars || 0) * 0.15;
+  const curAtk = card.baseAtk * starMultiplier;
+  const curHp = card.baseHp * starMultiplier;
+  const curSpd = card.baseSpd;
+  return Math.round(curAtk * 2 + curHp * 0.5 + curSpd * 1.5);
+}
 
-function loadLocalGameData() {
-  const saved = localStorage.getItem('CYBER_CARD_SAVE');
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved);
-      Object.assign(gameState.player, parsed.player || {});
-      gameState.player.maxBenchSlots = gameState.player.maxBenchSlots || 2;
-      gameState.player.superDust = gameState.player.superDust || 0;
-      gameState.inventory = parsed.inventory || [];
-      gameState.deck = parsed.deck || { main: [], sub: [] };
-      gameState.buffsOwned = parsed.buffsOwned || gameState.buffsOwned;
-    } catch (e) {
-      console.warn('Lỗi đọc dữ liệu local:', e);
-    }
+// 1. TÍNH TOÁN TEAM OVR & PHÂN BẬC DANH HIỆU PVE
+function calculateTeamOVR() {
+  const mainCards = gameState.player.deck.main;
+  const subCards = gameState.player.deck.sub;
+
+  if (mainCards.length === 0) return 0;
+
+  const mainCpTotal = mainCards.reduce((sum, c) => sum + calculateCardCP(c), 0);
+  const avgMainCP = mainCpTotal / mainCards.length;
+
+  let avgSubCP = 0;
+  if (subCards.length > 0) {
+    const subCpTotal = subCards.reduce((sum, c) => sum + calculateCardCP(c), 0);
+    avgSubCP = subCpTotal / subCards.length;
   }
+
+  // 80% từ đội hình chính + 20% từ ghế dự bị
+  const ovr = Math.round(avgMainCP * 0.8 + avgSubCP * 0.2);
+  return ovr;
 }
 
-function saveGameData() {
-  localStorage.setItem('CYBER_CARD_SAVE', JSON.stringify({
-    player: gameState.player,
-    inventory: gameState.inventory,
-    deck: gameState.deck,
-    buffsOwned: gameState.buffsOwned
-  }));
-  if (typeof syncPlayerDataToMockAPI === 'function') {
-    syncPlayerDataToMockAPI();
-  }
+function getOVRTier(ovr) {
+  if (ovr < 500) return { title: 'Tân Binh', color: '#8d99ae' };
+  if (ovr < 1500) return { title: 'Chiến Binh Thép', color: '#2ec4b6' };
+  if (ovr < 2500) return { title: 'Thợ Săn Hư Không', color: '#3a86ff' };
+  if (ovr < 3500) return { title: 'Đại Tướng Bất Bại', color: '#ffbe0b' };
+  return { title: 'Huyền Thoại Bất Diệt', color: '#ff007f' };
 }
 
-function initStarterCardsIfEmpty() {
-  if (gameState.inventory.length === 0) {
-    const starterCards = ALL_500_CARDS.filter(c => c.rank === 'C').slice(0, 5);
-    const starterB = ALL_500_CARDS.filter(c => c.rank === 'B').slice(0, 2);
-    const initialPool = [...starterCards, ...starterB];
+// CẬP NHẬT GIAO DIỆN TOP HUD
+function updateTopHUD() {
+  document.getElementById('playerDisplayName').textContent = gameState.player.name;
+  document.getElementById('playerLevelTag').textContent = `Lv.${gameState.player.level}`;
 
-    initialPool.forEach(baseCard => {
-      const inst = createCardInstance(baseCard.id, 0);
-      gameState.inventory.push(inst);
-    });
-
-    gameState.deck.main = gameState.inventory.slice(0, 5).map(c => c.instanceId);
-    gameState.deck.sub = gameState.inventory.slice(5, 7).map(c => c.instanceId);
-    saveGameData();
-  }
-}
-
-function createCardInstance(cardId, stars = 0) {
-  return {
-    instanceId: 'INST_' + Date.now() + '_' + Math.floor(Math.random() * 100000),
-    cardId: cardId,
-    stars: stars
-  };
-}
-
-function getCardBase(cardId) {
-  return ALL_500_CARDS.find(c => c.id === cardId);
-}
-
-function getComputedStats(instance) {
-  const base = getCardBase(instance.cardId);
-  if (!base) return { atk: 10, hp: 50, spd: 50, maxHp: 50, rank: 'C', name: 'Vô Danh', elementInfo: { icon: '❓' } };
-  const starMultiplier = 1 + (instance.stars * 0.15);
-  const maxHp = Math.floor(base.baseHp * starMultiplier);
-  const atk = Math.floor(base.baseAtk * starMultiplier);
-  const spd = Math.floor(base.baseSpd * starMultiplier);
-
-  // Điểm chiến lực CP
-  const cp = Math.floor(atk * 2 + maxHp * 0.5 + spd * 1.5 + (instance.stars * 100));
-
-  return {
-    ...base,
-    instanceId: instance.instanceId,
-    stars: instance.stars,
-    maxHp: maxHp,
-    atk: atk,
-    spd: spd,
-    cp: cp
-  };
-}
-
-// ==================== 3. HỆ THỐNG LEVEL & HUD ====================
-function addPlayerExp(amount) {
-  gameState.player.exp += amount;
-  while (gameState.player.exp >= gameState.player.maxExp) {
-    gameState.player.exp -= gameState.player.maxExp;
-    gameState.player.level++;
-    gameState.player.maxExp = Math.floor(gameState.player.level * 150 + Math.pow(gameState.player.level, 2) * 25);
-    showLevelUpModal(gameState.player.level);
-  }
-  renderTopHUD();
-  saveGameData();
-}
-
-function showLevelUpModal(newLv) {
-  const rewardGold = newLv * 300;
-  const rewardGems = 15;
-  const rewardDust = newLv * 60;
-
-  gameState.player.gold += rewardGold;
-  gameState.player.gems += rewardGems;
-  gameState.player.dust += rewardDust;
-
-  document.getElementById('modalNewLevel').innerText = `Lv.${newLv}`;
-  document.getElementById('modalLevelRewards').innerHTML = `
-    <div>🪙 +${rewardGold.toLocaleString()} Vàng</div>
-    <div>💎 +${rewardGems} Tinh Thạch</div>
-    <div>🌟 +${rewardDust} Bụi Sao</div>
-    <div style="color: #00f2fe; margin-top:8px;">Chỉ số toàn đội hình tăng trưởng theo cấp độ!</div>
-  `;
-  document.getElementById('levelUpModal').classList.remove('hidden');
-}
-
-function closeLevelUpModal() {
-  document.getElementById('levelUpModal').classList.add('hidden');
-  renderTopHUD();
-}
-
-function renderTopHUD() {
-  document.getElementById('playerDisplayName').innerText = gameState.player.name;
-  document.getElementById('playerLevelTag').innerText = `Lv.${gameState.player.level}`;
-
-  const expPercent = Math.min(100, Math.floor((gameState.player.exp / gameState.player.maxExp) * 100));
+  const maxExp = gameState.player.level * 175;
+  const expPercent = Math.min(100, Math.round((gameState.player.exp / maxExp) * 100));
   document.getElementById('expFill').style.width = `${expPercent}%`;
-  document.getElementById('expText').innerText = `${gameState.player.exp}/${gameState.player.maxExp} EXP (${expPercent}%)`;
+  document.getElementById('expText').textContent = `${gameState.player.exp}/${maxExp} EXP (${expPercent}%)`;
 
-  document.getElementById('goldDisplay').innerText = gameState.player.gold.toLocaleString();
-  document.getElementById('gemDisplay').innerText = gameState.player.gems.toLocaleString();
-  document.getElementById('dustDisplay').innerText = gameState.player.dust.toLocaleString();
-  document.getElementById('superDustDisplay').innerText = gameState.player.superDust.toLocaleString();
-  document.getElementById('awakenStoneDisplay').innerText = gameState.player.awakenStones;
-  document.getElementById('mythicStoneDisplay').innerText = gameState.player.mythicStones;
-  document.getElementById('totalCardsCount').innerText = gameState.inventory.length;
+  const ovr = calculateTeamOVR();
+  const tier = getOVRTier(ovr);
+  document.getElementById('teamOvrScore').textContent = ovr;
+  const tierTag = document.getElementById('teamOvrTierTag');
+  tierTag.textContent = tier.title;
+  tierTag.style.color = tier.color;
+  tierTag.style.borderColor = tier.color;
 
-  document.getElementById('countBuffHeal').innerText = gameState.buffsOwned.HEAL;
-  document.getElementById('countBuffShield').innerText = gameState.buffsOwned.SHIELD;
-  document.getElementById('countBuffAtk').innerText = gameState.buffsOwned.OVERLOAD;
-  document.getElementById('countBuffSpeed').innerText = gameState.buffsOwned.HASTE;
+  document.getElementById('goldDisplay').textContent = gameState.player.gold.toLocaleString('vi-VN');
+  document.getElementById('gemDisplay').textContent = gameState.player.gems.toLocaleString('vi-VN');
+  document.getElementById('dustDisplay').textContent = gameState.player.normalDust.toLocaleString('vi-VN');
+  document.getElementById('superDustDisplay').textContent = gameState.player.superDust.toLocaleString('vi-VN');
+  document.getElementById('totalCardsCount').textContent = gameState.player.inventory.length;
+
+  document.getElementById('deckSubCountBadge').textContent = gameState.player.benchCapacity;
+  document.getElementById('currentBenchSlotsTxt').textContent = gameState.player.benchCapacity;
+  
+  const benchCost = gameState.player.benchCapacity * 15;
+  document.getElementById('benchUpgradeCostTxt').textContent = gameState.player.benchCapacity >= 10 ? 'Đã đạt tối đa (10 ô)' : `Chi phí: ${benchCost} 💎`;
 }
 
-function setupTabsNavigation() {
-  const navBtns = document.querySelectorAll('.nav-btn');
-  navBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      navBtns.forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+// 2. TẠO THẺ CÓ ĐỘI LỆCH THEO OVR CHO BOT
+function generateScaledBotCard(targetCP, rankHint = 'A') {
+  const template = ALL_500_CARDS.find(c => c.rank === rankHint) || ALL_500_CARDS[0];
+  const elemKeys = ['FIRE', 'ICE', 'THUNDER', 'DARK'];
+  const randElem = elemKeys[Math.floor(Math.random() * elemKeys.length)];
 
-      btn.classList.add('active');
-      const targetId = btn.getAttribute('data-tab');
-      const targetPane = document.getElementById(targetId);
-      if (targetPane) targetPane.classList.add('active');
+  // Quy ngược chỉ số tương ứng theo CP mục tiêu
+  // CP = ATK * 2 + HP * 0.5 + SPD * 1.5
+  const baseAtk = Math.max(30, Math.round(targetCP * 0.22));
+  const baseHp = Math.max(120, Math.round(targetCP * 0.85));
+  const baseSpd = Math.max(50, Math.round(targetCP * 0.12));
 
-      if (targetId === 'deckTab') {
-        renderFormationDeck();
-        renderCollection();
-      } else if (targetId === 'forgeTab') {
-        renderForgeCardList();
-      }
-    });
-  });
+  return {
+    uniqueId: `BOT_${Math.random().toString(36).substr(2, 9)}`,
+    id: template.id,
+    name: template.name,
+    rank: rankHint,
+    element: randElem,
+    elementInfo: ELEMENTS[randElem],
+    baseAtk: baseAtk,
+    baseHp: baseHp,
+    baseSpd: baseSpd,
+    stars: 0,
+    targetType: template.targetType,
+    currentHp: baseHp,
+    maxHp: baseHp,
+    superArmorActive: false,
+    skipNextTurn: false
+  };
 }
 
-// ==================== 4. TỐI ƯU ĐỘI HÌNH & KÉO THẢ (DRAG & DROP) ====================
-function autoOptimizeFormation() {
-  if (gameState.inventory.length === 0) return;
+// 3. TẠO ĐỘI HÌNH BOT (THƯỜNG & GHÉP NHANH CÂN OVR)
+function buildBotTeam(botTier, isQuickMatch = false) {
+  const cfg = BOT_LEVELS_CONFIG[botTier];
+  const playerOvr = Math.max(300, calculateTeamOVR());
 
-  // Tính CP và sắp xếp toàn bộ thẻ giảm dần
-  const sortedInventory = [...gameState.inventory].map(inst => getComputedStats(inst))
-    .sort((a, b) => b.cp - a.cp);
+  let targetBotOvr = playerOvr;
+  if (isQuickMatch) {
+    const ratio = cfg.ovrRatio[0] + Math.random() * (cfg.ovrRatio[1] - cfg.ovrRatio[0]);
+    targetBotOvr = Math.round(playerOvr * ratio);
+  }
 
-  // Lấy 5 thẻ có CP cao nhất làm Tiên Phong
-  const top5Main = sortedInventory.slice(0, 5).map(c => c.instanceId);
-  gameState.deck.main = top5Main;
+  const mainTeam = [];
+  const subTeam = [];
 
-  // Lấy các thẻ tiếp theo điền kín số Slot dự bị hiện có
-  const maxSub = gameState.player.maxBenchSlots || 2;
-  const topSub = sortedInventory.slice(5, 5 + maxSub).map(c => c.instanceId);
-  gameState.deck.sub = topSub;
-
-  saveGameData();
-  renderFormationDeck();
-  alert('ĐÃ TỐI ƯU ĐỘI HÌNH!\nHệ thống đã tự động bố trí các chiến binh có Lực Chiến (CP) cao nhất ra trận!');
-}
-
-function renderFormationDeck() {
-  const mainRow = document.getElementById('deckMainRow');
-  const subRow = document.getElementById('deckSubRow');
-  const subBadge = document.getElementById('deckSubCountBadge');
-  if (!mainRow || !subRow) return;
-
-  mainRow.innerHTML = '';
-  subRow.innerHTML = '';
-
-  const maxSub = gameState.player.maxBenchSlots || 2;
-  if (subBadge) subBadge.innerText = maxSub;
-
-  // Render 5 Tiên Phong
   for (let i = 0; i < 5; i++) {
-    const instId = gameState.deck.main[i];
-    const inst = gameState.inventory.find(c => c.instanceId === instId);
-    mainRow.appendChild(createFormationSlotElement(inst, i, 'MAIN'));
+    const rank = cfg.cardRanks[Math.floor(Math.random() * cfg.cardRanks.length)];
+    mainTeam.push(generateScaledBotCard(targetBotOvr, rank));
   }
 
-  // Render Ghế Dự Bị
-  for (let j = 0; j < maxSub; j++) {
-    const instId = gameState.deck.sub[j];
-    const inst = gameState.inventory.find(c => c.instanceId === instId);
-    subRow.appendChild(createFormationSlotElement(inst, j, 'SUB'));
+  for (let i = 0; i < cfg.subSlots; i++) {
+    const rank = cfg.cardRanks[Math.floor(Math.random() * cfg.cardRanks.length)];
+    subTeam.push(generateScaledBotCard(Math.round(targetBotOvr * 0.85), rank));
   }
 
-  updateBenchUpgradeUI();
+  return { main: mainTeam, sub: subTeam, config: cfg, targetOvr: targetBotOvr };
 }
 
-function createFormationSlotElement(instance, slotIndex, groupType) {
-  const el = document.createElement('div');
-  el.className = 'bench-card';
-  el.setAttribute('data-group', groupType);
-  el.setAttribute('data-slot', slotIndex);
+// 4. BẮT ĐẦU TRẬN ĐẤU (THƯỜNG HOẶC GHÉP NHANH)
+function startBattle(tier) {
+  initCombatSession(tier, false);
+}
 
-  if (!instance) {
-    el.innerHTML = `<div style="font-size:11px; color:#555; padding: 30px 0;">[Trống]</div>`;
-  } else {
-    const comp = getComputedStats(instance);
-    el.classList.add(`rank-${comp.rank.toLowerCase()}`);
-    el.setAttribute('draggable', 'true');
-    el.innerHTML = `
-      <div class="card-stars ${comp.stars >= 6 ? 'mythic-stars' : ''}">★ ${comp.stars}</div>
-      <div style="font-size:20px;">${comp.elementInfo.icon}</div>
-      <div class="card-title">${comp.name}</div>
-      <div class="card-combat-stats">
-        <span class="atk">⚔️${comp.atk}</span>
-        <span class="spd">⚡${comp.spd}</span>
-      </div>
-      <div style="font-size:10px; color:#00f2fe; margin-top:2px;">CP: ${comp.cp}</div>
-    `;
+function startQuickMatch(tier) {
+  initCombatSession(tier, true);
+}
 
-    // Sự kiện Drag
-    el.addEventListener('dragstart', (e) => {
-      gameState.draggedCardData = { groupType, slotIndex, instanceId: instance.instanceId };
-      el.classList.add('dragging');
-      e.dataTransfer.setData('text/plain', instance.instanceId);
-    });
-
-    el.addEventListener('dragend', () => {
-      el.classList.remove('dragging');
-      document.querySelectorAll('.drag-over').forEach(box => box.classList.remove('drag-over'));
-    });
+function initCombatSession(tier, isQuickMatch) {
+  if (gameState.player.deck.main.length === 0) {
+    alert('Đội hình chính của bạn chưa có tướng nào! Hãy vào tab "ĐỘI HÌNH & KHO" để xếp quân.');
+    return;
   }
 
-  // Sự kiện Drop tiếp nhận
-  el.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    el.classList.add('drag-over');
+  const botData = buildBotTeam(tier, isQuickMatch);
+
+  // Chuẩn bị dàn bài người chơi vào trận
+  const playerMain = gameState.player.deck.main.map(c => {
+    const mult = 1 + (c.stars || 0) * 0.15;
+    const maxHp = Math.round(c.baseHp * mult);
+    return {
+      ...c,
+      currentHp: maxHp,
+      maxHp: maxHp,
+      calcAtk: Math.round(c.baseAtk * mult),
+      calcSpd: c.baseSpd,
+      superArmorActive: false,
+      skipNextTurn: false
+    };
   });
 
-  el.addEventListener('dragleave', () => {
-    el.classList.remove('drag-over');
+  const playerSub = gameState.player.deck.sub.map(c => {
+    const mult = 1 + (c.stars || 0) * 0.15;
+    const maxHp = Math.round(c.baseHp * mult);
+    return {
+      ...c,
+      currentHp: maxHp,
+      maxHp: maxHp,
+      calcAtk: Math.round(c.baseAtk * mult),
+      calcSpd: c.baseSpd,
+      superArmorActive: false,
+      skipNextTurn: false
+    };
   });
 
-  el.addEventListener('drop', (e) => {
-    e.preventDefault();
-    el.classList.remove('drag-over');
-    handleCardDropSwap(groupType, slotIndex);
+  gameState.combat = {
+    botTier: tier,
+    botConfig: botData.config,
+    isBossRaid: false,
+    botMain: botData.main,
+    botSub: botData.sub,
+    playerMain: playerMain,
+    playerSub: playerSub,
+    turn: 'PLAYER',
+    selectedAttackerIdx: null,
+    buffCooldowns: { HEAL: 0, SHIELD: 0, OVERLOAD: 0, HASTE: 0 },
+    activeBuffs: { shieldActive: false, atkBoost: 1.0, hasteActive: false }
+  };
+
+  document.getElementById('botSelectView').classList.add('hidden');
+  document.getElementById('battleArenaView').classList.remove('hidden');
+  renderCombatArena();
+  logCombat(`Trận đấu bắt đầu! Đối thủ: ${botData.config.name} (OVR Bot: ${botData.targetOvr})`);
+}
+
+// 5. BOSS PHỤ BẢN CO GIÃN THEO OVR (DYNAMIC BOSS SCALING)
+function startBossRaid(bossKey) {
+  const bossCfg = BOSS_RAIDS_CONFIG[bossKey];
+  if (gameState.player.level < bossCfg.minPlayerLevel) {
+    alert(`Cần đạt Cấp độ ${bossCfg.minPlayerLevel} để khiêu chiến Boss này!`);
+    return;
+  }
+  if (gameState.player.deck.main.length === 0) {
+    alert('Hãy xếp đội hình chính trước khi khiêu chiến Boss!');
+    return;
+  }
+
+  const playerOvr = Math.max(400, calculateTeamOVR());
+  const bossHp = Math.round(playerOvr * bossCfg.baseHpMultiplier * 5);
+  const bossAtk = Math.round(playerOvr * bossCfg.baseAtkMultiplier);
+
+  const bossCard = {
+    uniqueId: `BOSS_${bossKey}`,
+    id: bossKey,
+    name: bossCfg.name,
+    rank: 'SSS',
+    element: bossCfg.element,
+    elementInfo: ELEMENTS[bossCfg.element],
+    baseAtk: bossAtk,
+    baseHp: bossHp,
+    baseSpd: 90,
+    stars: 5,
+    targetType: 'AOE',
+    currentHp: bossHp,
+    maxHp: bossHp,
+    isWorldBoss: true
+  };
+
+  const playerMain = gameState.player.deck.main.map(c => {
+    const mult = 1 + (c.stars || 0) * 0.15;
+    const maxHp = Math.round(c.baseHp * mult);
+    return {
+      ...c,
+      currentHp: maxHp,
+      maxHp: maxHp,
+      calcAtk: Math.round(c.baseAtk * mult),
+      calcSpd: c.baseSpd,
+      superArmorActive: false,
+      skipNextTurn: false
+    };
   });
 
+  const playerSub = gameState.player.deck.sub.map(c => {
+    const mult = 1 + (c.stars || 0) * 0.15;
+    const maxHp = Math.round(c.baseHp * mult);
+    return {
+      ...c,
+      currentHp: maxHp,
+      maxHp: maxHp,
+      calcAtk: Math.round(c.baseAtk * mult),
+      calcSpd: c.baseSpd,
+      superArmorActive: false,
+      skipNextTurn: false
+    };
+  });
+
+  gameState.combat = {
+    isBossRaid: true,
+    bossConfig: bossCfg,
+    botMain: [bossCard],
+    botSub: [],
+    playerMain: playerMain,
+    playerSub: playerSub,
+    turn: 'PLAYER',
+    selectedAttackerIdx: null,
+    buffCooldowns: { HEAL: 0, SHIELD: 0, OVERLOAD: 0, HASTE: 0 },
+    activeBuffs: { shieldActive: false, atkBoost: 1.0, hasteActive: false }
+  };
+
+  document.getElementById('botSelectView').classList.add('hidden');
+  document.getElementById('battleArenaView').classList.remove('hidden');
+  renderCombatArena();
+  logCombat(`⚡ CẢNH BÁO BOSS: ${bossCfg.name} xuất hiện với HP: ${bossHp.toLocaleString('vi-VN')}!`);
+}
+
+// 6. GIAO DIỆN SÀN ĐẤU & HIỂN THỊ
+function renderCombatArena() {
+  const c = gameState.combat;
+  if (!c) return;
+
+  document.getElementById('turnIndicator').textContent = c.turn === 'PLAYER' ? 'LƯỢT CỦA BẠN' : 'LƯỢT ĐỐI THỦ';
+  document.getElementById('turnIndicator').style.background = c.turn === 'PLAYER' ? '#00f2fe' : '#ff0055';
+  document.getElementById('botSubCount').textContent = `Dự bị địch: ${c.botSub.length}`;
+  document.getElementById('playerBenchCountTxt').textContent = `Dự bị: ${c.playerSub.length}/${gameState.player.benchCapacity}`;
+
+  // Vẽ thẻ bot
+  const botRow = document.getElementById('botFieldSlots');
+  botRow.innerHTML = '';
+  c.botMain.forEach((card, idx) => {
+    const cardEl = createCombatCardElement(card, 'BOT', idx);
+    if (c.turn === 'PLAYER' && c.selectedAttackerIdx !== null && card.currentHp > 0) {
+      cardEl.classList.add('targetable');
+      cardEl.onclick = () => playerExecuteAttack(c.selectedAttackerIdx, idx);
+    }
+    botRow.appendChild(cardEl);
+  });
+
+  // Vẽ thẻ người chơi
+  const pRow = document.getElementById('playerFieldSlots');
+  pRow.innerHTML = '';
+  c.playerMain.forEach((card, idx) => {
+    const cardEl = createCombatCardElement(card, 'PLAYER', idx);
+    if (c.turn === 'PLAYER' && card.currentHp > 0) {
+      if (c.selectedAttackerIdx === idx) {
+        cardEl.classList.add('selected-attacker');
+      }
+      cardEl.onclick = () => {
+        c.selectedAttackerIdx = idx;
+        renderCombatArena();
+        logCombat(`Đã chọn [${card.name}] sẵn sàng xuất kích. Hãy bấm vào mục tiêu địch!`);
+      };
+    }
+    pRow.appendChild(cardEl);
+  });
+
+  // Vẽ hàng ghế dự bị
+  const benchRow = document.getElementById('playerBenchSlots');
+  benchRow.innerHTML = '';
+  c.playerSub.forEach(card => {
+    const bCard = document.createElement('div');
+    bCard.className = `bench-card rank-${card.rank.toLowerCase()}`;
+    bCard.innerHTML = `
+      <div class="card-stars">⭐${card.stars || 0}</div>
+      <div class="card-title">${card.name}</div>
+      <div style="font-size: 10px; color: #00f2fe;">HP: ${card.currentHp}</div>
+    `;
+    benchRow.appendChild(bCard);
+  });
+
+  updateBuffButtonLabels();
+}
+
+function createCombatCardElement(card, side, idx) {
+  const el = document.createElement('div');
+  el.className = `battle-card rank-${card.rank.toLowerCase()} ${card.currentHp <= 0 ? 'dead' : ''}`;
+  const hpPct = Math.max(0, Math.min(100, (card.currentHp / card.maxHp) * 100));
+
+  let armorTag = card.superArmorActive ? '<div style="color: #ffbe0b; font-size: 9px; font-weight: 900;">🛡️ SIÊU GIÁP</div>' : '';
+  let skipTag = card.skipNextTurn ? '<div style="color: #ff007f; font-size: 9px; font-weight: 900;">❄️ MẤT LƯỢT</div>' : '';
+
+  el.innerHTML = `
+    <div class="card-stars ${card.stars >= 6 ? 'mythic-stars' : ''}">★ ${card.stars || 0}</div>
+    <div class="card-art-emoji">${card.elementInfo ? card.elementInfo.icon : '⚔️'}</div>
+    <div class="card-title">${card.name}</div>
+    ${armorTag}
+    ${skipTag}
+    <div class="card-hp-bar"><div class="card-hp-fill" style="width: ${hpPct}%;"></div></div>
+    <div class="card-combat-stats">
+      <span class="atk">⚔️${card.calcAtk || card.baseAtk}</span>
+      <span class="spd">⚡${card.calcSpd || card.baseSpd}</span>
+      <span style="color:#00f076;">❤️${card.currentHp}/${card.maxHp}</span>
+    </div>
+  `;
   return el;
 }
 
-// Xử lý hoán đổi vị trí thẻ khi thả chuột
-function handleCardDropSwap(targetGroup, targetSlot) {
-  const source = gameState.draggedCardData;
-  if (!source) return;
+// 7. CƠ CHẾ TẤN CÔNG & ĐÒN KỸ NĂNG EVENT HALLOWEEN CỦA PHE TA
+function playerExecuteAttack(attackerIdx, targetIdx) {
+  const c = gameState.combat;
+  const attacker = c.playerMain[attackerIdx];
+  const target = c.botMain[targetIdx];
 
-  const sourceList = source.groupType === 'MAIN' ? gameState.deck.main : gameState.deck.sub;
-  const targetList = targetGroup === 'MAIN' ? gameState.deck.main : gameState.deck.sub;
+  if (!attacker || !target || attacker.currentHp <= 0 || target.currentHp <= 0) return;
 
-  const temp = targetList[targetSlot];
-  targetList[targetSlot] = sourceList[source.slotIndex];
-  sourceList[source.slotIndex] = temp;
-
-  saveGameData();
-  renderFormationDeck();
-}
-
-function renderCollection(filterRank = 'ALL') {
-  const grid = document.getElementById('collectionGrid');
-  if (!grid) return;
-  grid.innerHTML = '';
-
-  const list = gameState.inventory.filter(inst => {
-    const base = getCardBase(inst.cardId);
-    return filterRank === 'ALL' || base.rank === filterRank;
-  });
-
-  list.forEach(inst => {
-    const comp = getComputedStats(inst);
-    const cardEl = document.createElement('div');
-    cardEl.className = `battle-card rank-${comp.rank.toLowerCase()}`;
-    cardEl.innerHTML = `
-      <div class="card-stars ${comp.stars >= 6 ? 'mythic-stars' : ''}">★ ${comp.stars}</div>
-      <div class="card-art-emoji">${comp.elementInfo.icon}</div>
-      <div class="card-title">${comp.name}</div>
-      <div class="card-combat-stats">
-        <span class="atk">⚔️${comp.atk}</span>
-        <span class="spd">⚡${comp.spd}</span>
-      </div>
-      <div style="font-size:10px; color:#00f2fe; margin-top:2px;">CP: ${comp.cp}</div>
-      <button class="btn-small" style="margin-top:6px; font-size:10px;" onclick="assignCardToDeck('${inst.instanceId}')">Trang Bị</button>
-    `;
-    grid.appendChild(cardEl);
-  });
-}
-
-function filterCards(rank) {
-  document.querySelectorAll('#deckTab .filter-btn').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
-  renderCollection(rank);
-}
-
-function assignCardToDeck(instanceId) {
-  if (gameState.deck.main.includes(instanceId) || gameState.deck.sub.includes(instanceId)) {
-    alert('Thẻ này đã có trong đội hình ra trận!');
+  if (attacker.skipNextTurn) {
+    logCombat(`[${attacker.name}] đang bị hoảng loạn và mất lượt đánh!`);
+    attacker.skipNextTurn = false;
+    c.selectedAttackerIdx = null;
+    endPlayerTurn();
     return;
   }
 
-  const maxSub = gameState.player.maxBenchSlots || 2;
-  if (gameState.deck.main.length < 5) {
-    gameState.deck.main.push(instanceId);
-  } else if (gameState.deck.sub.length < maxSub) {
-    gameState.deck.sub.push(instanceId);
-  } else {
-    gameState.deck.main[4] = instanceId;
-  }
-  saveGameData();
-  renderFormationDeck();
-}
+  let baseDmg = (attacker.calcAtk || attacker.baseAtk) * c.activeBuffs.atkBoost;
+  c.activeBuffs.atkBoost = 1.0; // Reset buff công sau khi đánh
 
-// ==================== 5. NÂNG CẤP KHO QUÂN DỰ BỊ (2 -> 10 SLOTS) ====================
-function getBenchUpgradeCost(currentSlots) {
-  const step = currentSlots - 1;
-  return {
-    gold: step * 5000,
-    gems: step * 80,
-    dust: step * 400
-  };
-}
-
-function updateBenchUpgradeUI() {
-  const curSlots = gameState.player.maxBenchSlots || 2;
-  const slotTxt = document.getElementById('currentBenchSlotsTxt');
-  const costTxt = document.getElementById('benchUpgradeCostTxt');
-  const btn = document.getElementById('btnUpgradeBench');
-
-  if (slotTxt) slotTxt.innerText = curSlots;
-
-  if (curSlots >= 10) {
-    if (costTxt) costTxt.innerText = 'ĐÃ ĐẠT GIỚI HẠN TỐI ĐA (10/10 Ô DỰ BỊ)';
-    if (btn) btn.disabled = true;
-    return;
+  // Soi hệ khắc chế
+  if (attacker.elementInfo && attacker.elementInfo.strongAgainst === target.element) {
+    baseDmg *= 1.30;
+    logCombat(`Khắc chế nguyên tố! Đòn đánh được +30% sát thương!`);
   }
 
-  const cost = getBenchUpgradeCost(curSlots);
-  if (costTxt) {
-    costTxt.innerText = `Chi phí: ${cost.gold.toLocaleString()} 🪙 | ${cost.gems} 💎 | ${cost.dust.toLocaleString()} 🌟`;
-  }
-  if (btn) {
-    const canAfford = (gameState.player.gold >= cost.gold &&
-                       gameState.player.gems >= cost.gems &&
-                       gameState.player.dust >= cost.dust);
-    btn.disabled = !canAfford;
-  }
-}
-
-function upgradeBenchCapacity() {
-  const curSlots = gameState.player.maxBenchSlots || 2;
-  if (curSlots >= 10) {
-    alert('Kho quân dự bị đã đạt tối đa 10 slot!');
-    return;
-  }
-
-  const cost = getBenchUpgradeCost(curSlots);
-  if (gameState.player.gold < cost.gold || gameState.player.gems < cost.gems || gameState.player.dust < cost.dust) {
-    alert('Không đủ tài nguyên để mở thêm ô dự bị!');
-    return;
-  }
-
-  gameState.player.gold -= cost.gold;
-  gameState.player.gems -= cost.gems;
-  gameState.player.dust -= cost.dust;
-  gameState.player.maxBenchSlots = curSlots + 1;
-
-  alert(`NÂNG CẤP THÀNH CÔNG! Sức chứa quân dự bị tăng lên ${gameState.player.maxBenchSlots} Slot!`);
-  saveGameData();
-  renderTopHUD();
-  updateBenchUpgradeUI();
-  renderFormationDeck();
-}
-
-// ==================== 6. LÒ RÈN: CHỌN THẺ, NÂNG SAO & PHÂN TÁCH BỤI ====================
-function renderForgeCardList() {
-  renderForgePicker();
-  renderForgeTargetBox();
-  updateBenchUpgradeUI();
-}
-
-function renderForgePicker() {
-  const picker = document.getElementById('forgeCardsPicker');
-  if (!picker) return;
-  picker.innerHTML = '';
-
-  const list = gameState.inventory.filter(inst => {
-    const base = getCardBase(inst.cardId);
-    return gameState.forgeFilterRank === 'ALL' || base.rank === gameState.forgeFilterRank;
-  });
-
-  if (list.length === 0) {
-    picker.innerHTML = `<div style="grid-column: 1/-1; text-align:center; color:#718096; padding: 20px;">Không có thẻ nào thuộc phẩm cấp này.</div>`;
-    return;
-  }
-
-  list.forEach(inst => {
-    const comp = getComputedStats(inst);
-    const item = document.createElement('div');
-    item.className = `picker-card-item rank-${comp.rank.toLowerCase()} ${inst.instanceId === gameState.forgeSelectedInstanceId ? 'selected-target' : ''}`;
-
-    const isMax = (comp.stars >= 7) || (comp.stars >= 5 && !['S', 'SSS'].includes(comp.rank));
-
-    item.innerHTML = `
-      <div class="card-stars ${comp.stars >= 6 ? 'mythic-stars' : ''}">★ ${comp.stars}</div>
-      <div style="font-size:18px;">${comp.elementInfo.icon}</div>
-      <div class="card-title">${comp.name}</div>
-      <div class="card-combat-stats" style="margin: 4px 0;">
-        <span class="atk">⚔️${comp.atk}</span>
-        <span class="spd">⚡${comp.spd}</span>
-      </div>
-      ${isMax ? `<div class="max-star-badge">[MAX SAO]</div>` : `<button class="btn-select-for-forge" onclick="selectCardForForge('${inst.instanceId}')">Chọn Rèn</button>`}
-    `;
-    picker.appendChild(item);
-  });
-}
-
-function filterForgeCards(rank) {
-  gameState.forgeFilterRank = rank;
-  document.querySelectorAll('.forge-filter-row .filter-btn').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
-  renderForgePicker();
-}
-
-function selectCardForForge(instanceId) {
-  gameState.forgeSelectedInstanceId = instanceId;
-  renderForgePicker();
-  renderForgeTargetBox();
-}
-
-function renderForgeTargetBox() {
-  const box = document.getElementById('forgeTargetBox');
-  const scrapBtn = document.getElementById('btnScrapSelectedCard');
-  const scrapTxt = document.getElementById('scrapValuePreview');
-
-  if (!gameState.forgeSelectedInstanceId) {
-    box.innerHTML = `<div class="forge-empty-prompt">Bấm nút "Chọn Rèn" ở danh sách bên phải để đưa thẻ vào lò</div>`;
-    updateForgeUpgradePanel(null);
-    if (scrapBtn) scrapBtn.disabled = true;
-    if (scrapTxt) scrapTxt.innerText = `Giá trị: - Bụi Sao`;
-    return;
-  }
-
-  const inst = gameState.inventory.find(c => c.instanceId === gameState.forgeSelectedInstanceId);
-  if (!inst) return;
-  const comp = getComputedStats(inst);
-
-  box.innerHTML = `
-    <div class="battle-card rank-${comp.rank.toLowerCase()}" style="width:160px; pointer-events:none;">
-      <div class="card-stars ${comp.stars >= 6 ? 'mythic-stars' : ''}">★ ${comp.stars}</div>
-      <div class="card-art-emoji" style="font-size:36px;">${comp.elementInfo.icon}</div>
-      <div class="card-title">${comp.name}</div>
-      <div class="card-combat-stats" style="margin-top:8px;">
-        <span class="atk">ATK: ${comp.atk}</span>
-        <span class="spd">SPD: ${comp.spd}</span>
-      </div>
-      <div style="font-size:11px; color:#00f076; margin-top:4px;">HP: ${comp.maxHp}</div>
-      <div style="font-size:10px; color:#00f2fe; margin-top:2px;">CP: ${comp.cp}</div>
-    </div>
-  `;
-
-  // Cập nhật giá trị phân tách
-  const scrapVal = CARD_SCRAP_VALUES[comp.rank];
-  const bonusDust = comp.stars * 50;
-  if (scrapTxt) {
-    scrapTxt.innerText = `Nhận: ${scrapVal.normalDust + bonusDust} 🌟 ${scrapVal.superDust > 0 ? `+ ${scrapVal.superDust} 🌠` : ''}`;
-  }
-  if (scrapBtn) scrapBtn.disabled = false;
-
-  updateForgeUpgradePanel(inst);
-}
-
-function updateForgeUpgradePanel(instance) {
-  const title = document.getElementById('forgeUpgradeTitle');
-  const dustReq = document.getElementById('reqDust');
-  const superDustReq = document.getElementById('reqSuperDust');
-  const btn = document.getElementById('btnExecuteUpgrade');
-
-  if (!instance) {
-    title.innerText = 'YÊU CẦU NÂNG SAO';
-    btn.disabled = true;
-    return;
-  }
-
-  const base = getCardBase(instance.cardId);
-  const nextStar = instance.stars + 1;
-
-  if (nextStar > 7 || (nextStar > 5 && !['S', 'SSS'].includes(base.rank))) {
-    title.innerText = `ĐÃ ĐẠT GIỚI HẠN TỐI ĐA (${instance.stars}⭐)`;
-    dustReq.innerHTML = `🌟 Thẻ đã đạt cảnh giới tối thượng`;
-    superDustReq.innerHTML = `🌠 -`;
-    btn.disabled = true;
-    return;
-  }
-
-  const req = STAR_UPGRADE_REQUIREMENTS[nextStar];
-  title.innerText = `NÂNG CẤP LÊN ${nextStar} SAO ⭐`;
-
-  dustReq.innerHTML = `🌟 Bụi Sao Thường: <b>${gameState.player.dust.toLocaleString()} / ${req.normalDust.toLocaleString()}</b>`;
-
-  if (req.superDust > 0) {
-    superDustReq.innerHTML = `🌠 Bụi Sao Siêu Cấp: <b>${gameState.player.superDust} / ${req.superDust}</b>`;
-  } else {
-    superDustReq.innerHTML = `🌠 Bụi Sao Siêu Cấp: <b>Không cần</b>`;
-  }
-
-  const canAfford = (gameState.player.dust >= req.normalDust) && (gameState.player.superDust >= req.superDust);
-  btn.disabled = !canAfford;
-}
-
-function executeCardUpgrade() {
-  const inst = gameState.inventory.find(c => c.instanceId === gameState.forgeSelectedInstanceId);
-  if (!inst) return;
-  const base = getCardBase(inst.cardId);
-  const nextStar = inst.stars + 1;
-  const req = STAR_UPGRADE_REQUIREMENTS[nextStar];
-
-  gameState.player.dust -= req.normalDust;
-  gameState.player.superDust -= req.superDust;
-  inst.stars = nextStar;
-
-  if (nextStar === 7) {
-    gameState.player.hasGodCard = true;
-    triggerGlobalAlert(`THẦN THOẠI XUẤT THẾ: Người chơi ${gameState.player.name} vừa nâng ${base.name} LÊN 7 SAO TỐI THƯỢNG!`);
-  }
-
-  addPlayerExp(nextStar * 80);
-  saveGameData();
-  renderTopHUD();
-  renderForgeCardList();
-  renderFormationDeck();
-}
-
-// Phân tách thẻ đang chọn thành Bụi
-function scrapSelectedCard() {
-  const instId = gameState.forgeSelectedInstanceId;
-  if (!instId) return;
-
-  if (gameState.deck.main.includes(instId) || gameState.deck.sub.includes(instId)) {
-    alert('Thẻ này đang nằm trong Đội Hình Ra Trận! Hãy tháo ra trước khi phân tách.');
-    return;
-  }
-
-  const inst = gameState.inventory.find(c => c.instanceId === instId);
-  if (!inst) return;
-  const comp = getComputedStats(inst);
-  const scrapVal = CARD_SCRAP_VALUES[comp.rank];
-  const bonusDust = comp.stars * 50;
-
-  if (!confirm(`Bạn có chắc muốn phân tách [${comp.name}] để thu hồi ${scrapVal.normalDust + bonusDust} Bụi Sao?`)) {
-    return;
-  }
-
-  gameState.player.dust += (scrapVal.normalDust + bonusDust);
-  gameState.player.superDust += scrapVal.superDust;
-
-  // Xóa thẻ khỏi túi
-  gameState.inventory = gameState.inventory.filter(c => c.instanceId !== instId);
-  gameState.forgeSelectedInstanceId = null;
-
-  saveGameData();
-  renderTopHUD();
-  renderForgeCardList();
-  renderCollection();
-}
-
-// Tách nhanh toàn bộ thẻ Rank C và B (0 sao)
-function scrapAllTrashCards() {
-  const trashCards = gameState.inventory.filter(c => {
-    if (gameState.deck.main.includes(c.instanceId) || gameState.deck.sub.includes(c.instanceId)) return false;
-    const base = getCardBase(c.cardId);
-    return (base.rank === 'C' || base.rank === 'B') && c.stars === 0;
-  });
-
-  if (trashCards.length === 0) {
-    alert('Không tìm thấy thẻ C hoặc B (0 sao) nào chưa trang bị để phân tách!');
-    return;
-  }
-
-  let totalDustEarned = 0;
-  trashCards.forEach(c => {
-    const base = getCardBase(c.cardId);
-    totalDustEarned += CARD_SCRAP_VALUES[base.rank].normalDust;
-  });
-
-  if (!confirm(`Tìm thấy ${trashCards.length} thẻ C/B rác. Phân tách tất cả để thu về ${totalDustEarned.toLocaleString()} Bụi Sao?`)) {
-    return;
-  }
-
-  const trashIds = trashCards.map(c => c.instanceId);
-  gameState.inventory = gameState.inventory.filter(c => !trashIds.includes(c.instanceId));
-  gameState.player.dust += totalDustEarned;
-
-  if (trashIds.includes(gameState.forgeSelectedInstanceId)) {
-    gameState.forgeSelectedInstanceId = null;
-  }
-
-  saveGameData();
-  renderTopHUD();
-  renderForgeCardList();
-  renderCollection();
-  alert(`ĐÃ PHÂN TÁCH THÀNH CÔNG!\nThu hoạch được: +${totalDustEarned.toLocaleString()} Bụi Sao 🌟!`);
-}
-
-// Mua Bụi Siêu Cấp trong cửa hàng Buff
-function buySuperDustWithGems() {
-  if (gameState.player.gems < 30) {
-    alert('Không đủ Tinh Thạch 💎 (Cần 30 Gems)!');
-    return;
-  }
-  gameState.player.gems -= 30;
-  gameState.player.superDust += 1;
-  saveGameData();
-  renderTopHUD();
-  alert('Đã đổi thành công 1x Bụi Sao Siêu Cấp 🌠!');
-}
-
-function buySuperDustWithNormalDust() {
-  if (gameState.player.dust < 800) {
-    alert('Không đủ Bụi Sao Thường 🌟 (Cần 800 Bụi)!');
-    return;
-  }
-  gameState.player.dust -= 800;
-  gameState.player.superDust += 1;
-  saveGameData();
-  renderTopHUD();
-  alert('Đã nén thành công 800 Bụi Sao thành 1x Bụi Sao Siêu Cấp 🌠!');
-}
-
-// ==================== 7. CHIẾN TRƯỜNG & TỰ ĐỘNG ĐẨY LÍNH DỰ BỊ (AUTO-DEPLOY) ====================
-function startBattle(botLevelKey) {
-  const botConfig = BOT_LEVELS_CONFIG[botLevelKey];
-  gameState.battle.enemyType = 'BOT';
-  gameState.battle.botLevel = botLevelKey;
-  gameState.battle.bossConfig = null;
-
-  prepareCombatTeams(botConfig);
-  launchBattleView();
-}
-
-function startBossRaid(bossKey) {
-  const boss = BOSS_RAIDS_CONFIG[bossKey];
-  if (gameState.player.level < boss.minPlayerLevel) {
-    alert(`Yêu cầu cấp độ người chơi đạt Lv.${boss.minPlayerLevel} trở lên!`);
-    return;
-  }
-
-  gameState.battle.enemyType = 'BOSS';
-  gameState.battle.bossConfig = boss;
-
-  prepareCombatBossTeam(boss);
-  launchBattleView();
-}
-
-function prepareCombatTeams(botConfig) {
-  // Lấy 5 thẻ tiên phong
-  gameState.battle.playerCombatTeam = gameState.deck.main.slice(0, 5).map(id => {
-    const inst = gameState.inventory.find(c => c.instanceId === id);
-    const comp = getComputedStats(inst);
-    return { ...comp, currentHp: comp.maxHp, isDead: false };
-  });
-
-  // Lấy toàn bộ hàng ghế dự bị theo sức chứa hiện tại
-  const maxSub = gameState.player.maxBenchSlots || 2;
-  gameState.battle.playerCombatBench = gameState.deck.sub.slice(0, maxSub).map(id => {
-    const inst = gameState.inventory.find(c => c.instanceId === id);
-    const comp = getComputedStats(inst);
-    return { ...comp, currentHp: comp.maxHp, isDead: false };
-  });
-
-  // Sinh đội hình Bot
-  const botPool = ALL_500_CARDS.filter(c => botConfig.cardRanks.includes(c.rank));
-  const generateBotFighter = (forceSSS = false) => {
-    let base = botPool[Math.floor(Math.random() * botPool.length)];
-    let stars = Math.floor(Math.random() * (botConfig.starRange[1] - botConfig.starRange[0] + 1)) + botConfig.starRange[0];
-
-    if (forceSSS) {
-      const sssPool = ALL_500_CARDS.filter(c => c.rank === 'SSS');
-      base = sssPool[Math.floor(Math.random() * sssPool.length)];
-      stars = 7;
-    }
-
-    const mult = 1 + (stars * 0.15);
-    const hp = Math.floor(base.baseHp * mult);
-    return {
-      ...base,
-      stars: stars,
-      maxHp: hp,
-      currentHp: hp,
-      atk: Math.floor(base.baseAtk * mult),
-      spd: Math.floor(base.baseSpd * mult),
-      isDead: false
-    };
-  };
-
-  const hasBossSSS = botConfig.hasSSSChance && (Math.random() < botConfig.sssChanceRate);
-
-  gameState.battle.enemyCombatTeam = [];
-  for (let i = 0; i < 5; i++) {
-    const isSpecialSSS = (hasBossSSS && i === 0);
-    gameState.battle.enemyCombatTeam.push(generateBotFighter(isSpecialSSS));
-  }
-
-  // Dự bị của Bot tăng từ 2 lên tối đa 10 theo cấu hình
-  gameState.battle.enemyCombatBench = [];
-  for (let b = 0; b < botConfig.subSlots; b++) {
-    gameState.battle.enemyCombatBench.push(generateBotFighter());
-  }
-}
-
-function prepareCombatBossTeam(boss) {
-  gameState.battle.playerCombatTeam = gameState.deck.main.slice(0, 5).map(id => {
-    const inst = gameState.inventory.find(c => c.instanceId === id);
-    const comp = getComputedStats(inst);
-    return { ...comp, currentHp: comp.maxHp, isDead: false };
-  });
-
-  const maxSub = gameState.player.maxBenchSlots || 2;
-  gameState.battle.playerCombatBench = gameState.deck.sub.slice(0, maxSub).map(id => {
-    const inst = gameState.inventory.find(c => c.instanceId === id);
-    const comp = getComputedStats(inst);
-    return { ...comp, currentHp: comp.maxHp, isDead: false };
-  });
-
-  const mainBossUnit = {
-    id: boss.id,
-    name: boss.name,
-    rank: 'SSS',
-    stars: 7,
-    element: boss.element,
-    elementInfo: ELEMENTS[boss.element],
-    maxHp: boss.totalHp,
-    currentHp: boss.totalHp,
-    atk: boss.atk,
-    spd: boss.spd,
-    targetType: 'AOE',
-    isDead: false
-  };
-
-  gameState.battle.enemyCombatTeam = [mainBossUnit];
-  gameState.battle.enemyCombatBench = [];
-}
-
-function launchBattleView() {
-  document.getElementById('botSelectView').classList.add('hidden');
-  document.getElementById('battleArenaView').classList.remove('hidden');
-
-  gameState.battle.active = true;
-  gameState.battle.isPlayerTurn = true;
-  gameState.battle.attackerIndex = null;
-
-  renderBattlefield();
-  logCombat('Trận đấu bắt đầu! Hãy chọn 1 chiến binh bên bạn để xuất kích.');
-}
-
-// TỰ ĐỘNG ĐẨY LÍNH DỰ BỊ VÀO VỊ TRÍ TỬ TRẬN
-function autoDeployBenchReplacements() {
-  // 1. Phe Ta
-  gameState.battle.playerCombatTeam.forEach((card, idx) => {
-    if (card.isDead || card.currentHp <= 0) {
-      const availIdx = gameState.battle.playerCombatBench.findIndex(c => !c.isDead && c.currentHp > 0);
-      if (availIdx !== -1) {
-        const rep = gameState.battle.playerCombatBench.splice(availIdx, 1)[0];
-        logCombat(`🚨 [${card.name}] ngã xuống! Viện binh [${rep.name}] lập tức xông vào trận!`);
-        gameState.battle.playerCombatTeam[idx] = rep;
+  // A. KỸ NĂNG: DARK LORD (NỤ CƯỜI MA QUÁI - 10%)
+  if (attacker.id === 'CARD_EVENT_DARK_LORD' && Math.random() < 0.10) {
+    logCombat(`🎃 NỤ CƯỜI MA QUÁI! [Dark Lord] tăng 100% công, quét sạch cả 5 tướng địch và làm đối thủ mất lượt sau!`);
+    showMultiHitText('NỤ CƯỜI MA QUÁI!');
+    const aoeDmg = Math.round(baseDmg * 2.0);
+    c.botMain.forEach(b => {
+      if (b.currentHp > 0) {
+        applyDamageToBot(b, aoeDmg, attacker);
+        b.skipNextTurn = true;
       }
-    }
-  });
-
-  // 2. Phe Bot
-  gameState.battle.enemyCombatTeam.forEach((card, idx) => {
-    if (card.isDead || card.currentHp <= 0) {
-      const availIdx = gameState.battle.enemyCombatBench.findIndex(c => !c.isDead && c.currentHp > 0);
-      if (availIdx !== -1) {
-        const rep = gameState.battle.enemyCombatBench.splice(availIdx, 1)[0];
-        logCombat(`⚠️ Địch ngã gục! Bot điều ngay viện binh [${rep.name}] lên thay thế!`);
-        gameState.battle.enemyCombatTeam[idx] = rep;
-      }
-    }
-  });
-
-  // Cập nhật số lượng hiển thị trên giao diện
-  const botSubEl = document.getElementById('botSubCount');
-  if (botSubEl) {
-    const remain = gameState.battle.enemyCombatBench.filter(c => !c.isDead).length;
-    botSubEl.innerText = `Dự bị còn: ${remain}`;
-  }
-
-  const pSubEl = document.getElementById('playerBenchCountTxt');
-  if (pSubEl) {
-    const pRemain = gameState.battle.playerCombatBench.filter(c => !c.isDead).length;
-    pSubEl.innerText = `${pRemain}/${gameState.player.maxBenchSlots || 2}`;
-  }
-}
-
-function renderBattlefield() {
-  const botSlots = document.getElementById('botFieldSlots');
-  const playerSlots = document.getElementById('playerFieldSlots');
-  const benchSlots = document.getElementById('playerBenchSlots');
-
-  botSlots.innerHTML = '';
-  playerSlots.innerHTML = '';
-  benchSlots.innerHTML = '';
-
-  // Render Bot
-  gameState.battle.enemyCombatTeam.forEach((card, idx) => {
-    const el = document.createElement('div');
-    el.className = `battle-card rank-${card.rank.toLowerCase()} ${card.isDead ? 'dead' : ''}`;
-    if (gameState.battle.attackerIndex !== null && !card.isDead) {
-      el.classList.add('targetable');
-      el.onclick = () => executePlayerAttack(idx);
-    }
-
-    const hpPercent = Math.max(0, Math.floor((card.currentHp / card.maxHp) * 100));
-    el.innerHTML = `
-      <div class="card-stars ${card.stars >= 6 ? 'mythic-stars' : ''}">★ ${card.stars}</div>
-      <div class="card-art-emoji">${card.elementInfo.icon}</div>
-      <div class="card-title">${card.name}</div>
-      <div class="card-hp-bar"><div class="card-hp-fill" style="width:${hpPercent}%"></div></div>
-      <div class="card-combat-stats">
-        <span class="atk">⚔️${card.atk}</span>
-        <span class="spd">⚡${card.spd}</span>
-      </div>
-    `;
-    botSlots.appendChild(el);
-  });
-
-  // Render Player Team
-  gameState.battle.playerCombatTeam.forEach((card, idx) => {
-    const el = document.createElement('div');
-    el.className = `battle-card rank-${card.rank.toLowerCase()} ${card.isDead ? 'dead' : ''}`;
-    if (idx === gameState.battle.attackerIndex) {
-      el.classList.add('selected-attacker');
-    }
-
-    if (gameState.battle.isPlayerTurn && !card.isDead) {
-      el.onclick = () => selectAttacker(idx);
-    }
-
-    const hpPercent = Math.max(0, Math.floor((card.currentHp / card.maxHp) * 100));
-    el.innerHTML = `
-      <div class="card-stars ${card.stars >= 6 ? 'mythic-stars' : ''}">★ ${card.stars}</div>
-      <div class="card-art-emoji">${card.elementInfo.icon}</div>
-      <div class="card-title">${card.name}</div>
-      <div class="card-hp-bar"><div class="card-hp-fill" style="width:${hpPercent}%"></div></div>
-      <div class="card-combat-stats">
-        <span class="atk">⚔️${card.atk}</span>
-        <span class="spd">⚡${card.spd}</span>
-      </div>
-    `;
-    playerSlots.appendChild(el);
-  });
-
-  // Render Bench
-  gameState.battle.playerCombatBench.forEach((card, bIdx) => {
-    const el = document.createElement('div');
-    el.className = `bench-card ${card.isDead ? 'dead' : ''}`;
-    if (!card.isDead) {
-      el.title = 'Click để đổi lên sân thủ công';
-      el.onclick = () => swapBenchToField(bIdx);
-    }
-    el.innerHTML = `
-      <div style="font-size:10px; color:#ffbe0b;">DỰ BỊ ★${card.stars}</div>
-      <div style="font-size:18px;">${card.elementInfo.icon}</div>
-      <div class="card-title">${card.name}</div>
-      <div style="font-size:10px; color:#00f076;">HP: ${card.currentHp}</div>
-    `;
-    benchSlots.appendChild(el);
-  });
-
-  document.getElementById('turnIndicator').innerText = gameState.battle.isPlayerTurn ? 'LƯỢT CỦA BẠN' : 'ĐỐI THỦ PHẢN ĐÒN';
-}
-
-function selectAttacker(index) {
-  if (!gameState.battle.isPlayerTurn) return;
-  gameState.battle.attackerIndex = index;
-  renderBattlefield();
-  logCombat(`Đã chọn [${gameState.battle.playerCombatTeam[index].name}]. Hãy click chọn mục tiêu bên địch!`);
-}
-
-function swapBenchToField(benchIdx) {
-  if (!gameState.battle.isPlayerTurn) {
-    alert('Chỉ có thể thay người trong lượt của bạn!');
-    return;
-  }
-  if (gameState.battle.attackerIndex === null) {
-    alert('Hãy click chọn 1 thẻ trên sân trước để chỉ định vị trí cần thay!');
+    });
+    finishPlayerAttackAction();
     return;
   }
 
-  const fieldIdx = gameState.battle.attackerIndex;
-  const temp = gameState.battle.playerCombatTeam[fieldIdx];
-  gameState.battle.playerCombatTeam[fieldIdx] = gameState.battle.playerCombatBench[benchIdx];
-  gameState.battle.playerCombatBench[benchIdx] = temp;
-
-  logCombat(`Chiến thuật: [${temp.name}] lui về ghế dự bị, [${gameState.battle.playerCombatTeam[fieldIdx].name}] xuất kích!`);
-  gameState.battle.attackerIndex = fieldIdx;
-  renderBattlefield();
-}
-
-function executePlayerAttack(targetIndex) {
-  if (!gameState.battle.isPlayerTurn || gameState.battle.attackerIndex === null) return;
-
-  const attacker = gameState.battle.playerCombatTeam[gameState.battle.attackerIndex];
-  const target = gameState.battle.enemyCombatTeam[targetIndex];
-
-  gameState.battle.isPlayerTurn = false;
-  gameState.battle.attackerIndex = null;
-
-  // Tính số đòn multi-hit theo tốc độ
-  let speedRatio = attacker.spd / Math.max(1, target.spd);
-  if (gameState.battle.activeBuffs.haste) speedRatio *= 2.0;
-
-  let hitCount = 1;
-  if (speedRatio >= 2.0) hitCount = Math.floor(Math.random() * 3) + 6;
-  else if (speedRatio >= 1.5) hitCount = Math.floor(Math.random() * 2) + 4;
-  else if (speedRatio >= 1.2) hitCount = Math.floor(Math.random() * 2) + 2;
-
-  let baseDamagePerHit = Math.max(5, Math.floor(attacker.atk / (hitCount > 1 ? (hitCount * 0.7) : 1)));
-  if (gameState.battle.activeBuffs.overload) {
-    baseDamagePerHit = Math.floor(baseDamagePerHit * 1.6);
-    gameState.battle.activeBuffs.overload = false;
+  // B. KỸ NĂNG: XINGLENG (TRU DI NGŨ TƯỚNG - 20%)
+  if (attacker.id === 'CARD_EVENT_XINGLENG' && Math.random() < 0.20) {
+    logCombat(`🔥 TRU DI NGŨ TƯỚNG! [Xingleng] bộc phá đòn chí mạng 170% sức mạnh xuyên giáp!`);
+    showMultiHitText('TRU DI CHÍ MẠNG!');
+    const critDmg = Math.round(baseDmg * 1.70);
+    applyDamageToBot(target, critDmg, attacker);
+    finishPlayerAttackAction();
+    return;
   }
 
-  const isAdvantage = ELEMENTS[attacker.element].strongAgainst === target.element;
-  if (isAdvantage) {
-    baseDamagePerHit = Math.floor(baseDamagePerHit * 1.3);
-  }
-
-  showMultiHitBurst(hitCount);
-
-  let totalDmg = 0;
-  for (let h = 0; h < hitCount; h++) {
-    const dmg = baseDamagePerHit + Math.floor(Math.random() * 4);
-    totalDmg += dmg;
-    target.currentHp = Math.max(0, target.currentHp - dmg);
-
-    if (attacker.targetType === 'CLEAVE') {
-      [targetIndex - 1, targetIndex + 1].forEach(sideIdx => {
-        const sideTarget = gameState.battle.enemyCombatTeam[sideIdx];
-        if (sideTarget && !sideTarget.isDead) {
-          sideTarget.currentHp = Math.max(0, sideTarget.currentHp - Math.floor(dmg * 0.5));
-          if (sideTarget.currentHp === 0) sideTarget.isDead = true;
+  // C. KỸ NĂNG: ARMORED DARK XINGLENG (ADX)
+  if (attacker.id === 'CARD_EVENT_ADX') {
+    // Kiểm tra Tất Sát (~10%)
+    if (Math.random() < 0.10) {
+      logCombat(`💥 TẤT SÁT BÁT QUÁI CÔN! [ADX] quét diện rộng theo sơ đồ 100-75-50-25%!`);
+      showMultiHitText('TẤT SÁT DIỆN RỘNG!');
+      const spreadRates = [1.00, 0.75, 0.50, 0.25];
+      c.botMain.forEach((b, bIdx) => {
+        if (b.currentHp > 0) {
+          const dist = Math.abs(bIdx - targetIdx);
+          const rate = dist < spreadRates.length ? spreadRates[dist] : 0.10;
+          applyDamageToBot(b, Math.round(baseDmg * rate), attacker);
+        }
+      });
+    } else {
+      // Đòn đánh thường truyền xung lực: 100% - 25% - 10% - 5% - 1%
+      logCombat(`🥢 [ADX] xuất côn truyền lực chấn động dọc đội hình đối thủ!`);
+      const chainRates = [1.00, 0.25, 0.10, 0.05, 0.01];
+      c.botMain.forEach((b, bIdx) => {
+        if (b.currentHp > 0) {
+          const dist = Math.abs(bIdx - targetIdx);
+          const rate = dist < chainRates.length ? chainRates[dist] : 0.01;
+          applyDamageToBot(b, Math.round(baseDmg * rate), attacker);
         }
       });
     }
 
-    if (attacker.targetType === 'AOE') {
-      gameState.battle.enemyCombatTeam.forEach((other, oIdx) => {
-        if (oIdx !== targetIndex && !other.isDead) {
-          other.currentHp = Math.max(0, other.currentHp - Math.floor(dmg * 0.4));
-          if (other.currentHp === 0) other.isDead = true;
-        }
-      });
+    // Cơ chế Siêu Giáp (5% sau khi tấn công)
+    if (Math.random() < 0.05) {
+      attacker.superArmorActive = true;
+      logCombat(`🛡️ SIÊU GIÁP KÍCH HOẠT! [ADX] nhận 25% sát thương và sẵn sàng phản 120% đòn đánh tiếp theo!`);
+    }
+
+    finishPlayerAttackAction();
+    return;
+  }
+
+  // D. ĐÒN ĐÁNH CỦA CÁC TƯỚNG TIÊU CHUẨN (AOE / CLEAVE / SINGLE)
+  if (attacker.targetType === 'AOE') {
+    logCombat(`[${attacker.name}] tung Tuyệt kỹ Quét Toàn Sàn (AOE)!`);
+    c.botMain.forEach(b => {
+      if (b.currentHp > 0) applyDamageToBot(b, Math.round(baseDmg * 0.75), attacker);
+    });
+  } else if (attacker.targetType === 'CLEAVE') {
+    logCombat(`[${attacker.name}] chém lan 3 mục tiêu kề nhau (Cleave)!`);
+    [-1, 0, 1].forEach(offset => {
+      const idx = targetIdx + offset;
+      if (idx >= 0 && idx < c.botMain.length && c.botMain[idx].currentHp > 0) {
+        applyDamageToBot(c.botMain[idx], Math.round(baseDmg * (offset === 0 ? 1 : 0.5)), attacker);
+      }
+    });
+  } else {
+    // Đơn mục tiêu + Multi-hit theo tốc độ
+    const hits = c.activeBuffs.hasteActive ? 8 : (attacker.calcSpd > 130 ? 6 : (attacker.calcSpd > 90 ? 3 : 1));
+    c.activeBuffs.hasteActive = false;
+    if (hits > 1) showMultiHitText(`${hits} HITS COMBO!`);
+    const dmgPerHit = Math.round(baseDmg / (hits * 0.7));
+    for (let i = 0; i < hits; i++) {
+      applyDamageToBot(target, dmgPerHit, attacker);
     }
   }
 
-  if (target.currentHp === 0) target.isDead = true;
-
-  logCombat(`[${attacker.name}] giáng ${hitCount} HITS vào [${target.name}], gây ${totalDmg} sát thương! ${isAdvantage ? '(Khắc hệ +30%)' : ''}`);
-
-  // TỰ ĐỘNG ĐẨY LÍNH DỰ BỊ VÀO SÂN KHI CÓ QUÂN CHẾT
-  autoDeployBenchReplacements();
-  renderBattlefield();
-
-  if (checkBattleEnd()) return;
-
-  setTimeout(executeBotTurn, 1000);
+  finishPlayerAttackAction();
 }
 
-function showMultiHitBurst(hits) {
-  const burst = document.getElementById('multiHitBurst');
-  if (!burst) return;
-  burst.innerText = `${hits} HITS COMBO!`;
-  burst.classList.remove('hidden');
-  setTimeout(() => burst.classList.add('hidden'), 900);
+function applyDamageToBot(botCard, dmg, attacker) {
+  botCard.currentHp = Math.max(0, botCard.currentHp - dmg);
+  logCombat(`➔ [${botCard.name}] nhận ${dmg} sát thương từ [${attacker.name}]!`);
 }
 
-function executeBotTurn() {
-  if (!gameState.battle.active) return;
+function finishPlayerAttackAction() {
+  const c = gameState.combat;
+  c.selectedAttackerIdx = null;
+  checkFieldReplacements();
+  renderCombatArena();
 
-  const aliveBots = gameState.battle.enemyCombatTeam.filter(c => !c.isDead && c.currentHp > 0);
+  if (checkCombatVictory()) return;
+
+  endPlayerTurn();
+}
+
+function endPlayerTurn() {
+  const c = gameState.combat;
+  c.turn = 'BOT';
+  renderCombatArena();
+  setTimeout(() => botExecuteSmartTurn(), 1000);
+}
+
+// 8. BỘ NÃO AI BOT THÔNG MINH THEO CẤP ĐỘ
+function botExecuteSmartTurn() {
+  const c = gameState.combat;
+  if (!c || c.turn !== 'BOT') return;
+
+  // Lọc lính bot còn sống
+  const aliveBots = c.botMain.filter(b => b.currentHp > 0);
   if (aliveBots.length === 0) {
-    checkBattleEnd();
+    checkCombatVictory();
     return;
   }
+
   const attacker = aliveBots[Math.floor(Math.random() * aliveBots.length)];
 
-  const alivePlayers = gameState.battle.playerCombatTeam.filter(c => !c.isDead && c.currentHp > 0);
-  if (alivePlayers.length === 0) {
-    checkBattleEnd();
+  if (attacker.skipNextTurn) {
+    logCombat(`[${attacker.name}] (Địch) bị dính hiệu ứng hoảng loạn, bỏ qua lượt này!`);
+    attacker.skipNextTurn = false;
+    c.turn = 'PLAYER';
+    renderCombatArena();
     return;
   }
-  const target = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
 
-  if (gameState.battle.activeBuffs.shield) {
-    logCombat(`Khiên Hộ Thể đã chặn đứng 100% sát thương từ đòn đánh của [${attacker.name}]!`);
-    gameState.battle.activeBuffs.shield = false;
-  } else {
-    const dmg = Math.max(10, Math.floor(attacker.atk * (0.8 + Math.random() * 0.4)));
-    target.currentHp = Math.max(0, target.currentHp - dmg);
-    if (target.currentHp === 0) target.isDead = true;
-    logCombat(`Đối phương [${attacker.name}] phản kích, gây ${dmg} sát thương lên [${target.name}]!`);
+  const alivePlayers = c.playerMain.map((p, idx) => ({ p, idx })).filter(item => item.p.currentHp > 0);
+  if (alivePlayers.length === 0) {
+    handleBattleDefeat();
+    return;
   }
 
-  // TỰ ĐỘNG ĐẨY LÍNH DỰ BỊ VÀO SÂN KHI CÓ QUÂN CHẾT
-  autoDeployBenchReplacements();
-  renderBattlefield();
+  let chosenTargetItem = null;
+  const aiStrategy = c.botConfig ? c.botConfig.aiStrategy : 'RANDOM';
 
-  if (checkBattleEnd()) return;
+  // CHIẾN THUẬT AI BOT:
+  if (aiStrategy === 'FOCUS_FIRE') {
+    // Cấp 3: Focus Fire vào tướng thấp máu nhất
+    alivePlayers.sort((a, b) => a.p.currentHp - b.p.currentHp);
+    chosenTargetItem = alivePlayers[0];
+    logCombat(`🎯 AI Focus Fire: Đối thủ nhắm vào [${chosenTargetItem.p.name}] đang yếu máu nhất!`);
+  } else if (aiStrategy === 'ELEMENT_COUNTER') {
+    // Cấp 4: Tìm tướng bị khắc chế nguyên tố
+    const counterItem = alivePlayers.find(item => attacker.elementInfo && attacker.elementInfo.strongAgainst === item.p.element);
+    chosenTargetItem = counterItem || alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
+    if (counterItem) logCombat(`⚡ AI Khắc Hệ: Đối thủ chọn khắc chế tướng hệ [${chosenTargetItem.p.element}]!`);
+  } else if (aiStrategy === 'TACTICAL_ASSASSIN') {
+    // Cấp 5: Ưu tiên diệt thẻ AOE/CLEAVE của ta trước
+    const aoeThreat = alivePlayers.find(item => item.p.targetType === 'AOE' || item.p.targetType === 'CLEAVE');
+    if (aoeThreat) {
+      chosenTargetItem = aoeThreat;
+      logCombat(`🗡️ AI Sát Thủ: Nhắm triệt hạ [${chosenTargetItem.p.name}] để bẻ gãy hỏa lực diện rộng!`);
+    } else {
+      alivePlayers.sort((a, b) => a.p.currentHp - b.p.currentHp);
+      chosenTargetItem = alivePlayers[0];
+    }
+  } else {
+    // Cấp 1-2: Ngẫu nhiên
+    chosenTargetItem = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
+  }
 
-  gameState.battle.isPlayerTurn = true;
-  gameState.battle.activeBuffs.haste = false;
-  renderBattlefield();
+  const target = chosenTargetItem.p;
+  let botDmg = attacker.calcAtk || attacker.baseAtk;
+
+  // Tính khắc hệ cho bot
+  if (attacker.elementInfo && attacker.elementInfo.strongAgainst === target.element) {
+    botDmg = Math.round(botDmg * 1.30);
+  }
+
+  // Kiểm tra Khiên Thần của phe ta
+  if (c.activeBuffs.shieldActive) {
+    logCombat(`🛡️ Khiên Hộ Thể đã hấp thụ hoàn toàn đòn đánh của [${attacker.name}]!`);
+    c.activeBuffs.shieldActive = false;
+  } else {
+    // Kiểm tra Siêu Giáp của ADX (phe ta)
+    if (target.superArmorActive) {
+      const realDmg = Math.round(botDmg * 0.25);
+      const reflectDmg = Math.round(botDmg * 1.20);
+      target.currentHp = Math.max(0, target.currentHp - realDmg);
+      target.superArmorActive = false; // Tiêu hao sau khi kích phản
+      logCombat(`🛡️ SIÊU GIÁP PHẢN PHÁCH! [ADX] chỉ chịu ${realDmg} sát thương và phản ngược ${reflectDmg} thẳng vào [${attacker.name}]!`);
+      attacker.currentHp = Math.max(0, attacker.currentHp - reflectDmg);
+    } else {
+      target.currentHp = Math.max(0, target.currentHp - botDmg);
+      logCombat(`💥 [${attacker.name}] gây ${botDmg} sát thương lên [${target.name}]!`);
+    }
+  }
+
+  checkFieldReplacements();
+  renderCombatArena();
+
+  if (checkCombatVictory()) return;
+
+  // Chuyển lại lượt cho người chơi
+  c.turn = 'PLAYER';
+  renderCombatArena();
 }
 
-function checkBattleEnd() {
-  const isEnemiesWiped = gameState.battle.enemyCombatTeam.every(c => c.isDead || c.currentHp <= 0) &&
-                         gameState.battle.enemyCombatBench.every(c => c.isDead || c.currentHp <= 0);
+// 9. THAY QUÂN DỰ BỊ TỰ ĐỘNG KHI TỬ TRẬN
+function checkFieldReplacements() {
+  const c = gameState.combat;
+  if (!c) return;
 
-  const isPlayersWiped = gameState.battle.playerCombatTeam.every(c => c.isDead || c.currentHp <= 0) &&
-                         gameState.battle.playerCombatBench.every(c => c.isDead || c.currentHp <= 0);
+  // Đẩy quân dự bị cho phe ta
+  c.playerMain.forEach((card, idx) => {
+    if (card.currentHp <= 0 && c.playerSub.length > 0) {
+      const subCard = c.playerSub.shift();
+      logCombat(`🔄 [${card.name}] tử trận! [${subCard.name}] lập tức từ ghế dự bị tiến lên tiếp chiến!`);
+      c.playerMain[idx] = subCard;
+    }
+  });
 
-  if (isEnemiesWiped) {
-    finishBattle(true);
+  // Đẩy quân dự bị cho phe Bot
+  c.botMain.forEach((card, idx) => {
+    if (card.currentHp <= 0 && c.botSub.length > 0) {
+      const subCard = c.botSub.shift();
+      c.botMain[idx] = subCard;
+    }
+  });
+}
+
+// KIỂM TRA THẮNG / THUA
+function checkCombatVictory() {
+  const c = gameState.combat;
+  const botAlive = c.botMain.some(b => b.currentHp > 0) || c.botSub.length > 0;
+  const playerAlive = c.playerMain.some(p => p.currentHp > 0) || c.playerSub.length > 0;
+
+  if (!botAlive) {
+    handleBattleVictory();
     return true;
-  } else if (isPlayersWiped) {
-    finishBattle(false);
+  }
+  if (!playerAlive) {
+    handleBattleDefeat();
     return true;
   }
   return false;
 }
 
-function finishBattle(isVictory) {
-  gameState.battle.active = false;
+function handleBattleVictory() {
+  const c = gameState.combat;
+  logCombat(`🎉 CHIẾN THẮNG TUYỆT ĐỐI!`);
 
-  if (isVictory) {
-    if (gameState.battle.enemyType === 'BOT') {
-      const cfg = BOT_LEVELS_CONFIG[gameState.battle.botLevel];
-      gameState.player.gold += cfg.rewards.gold;
-      gameState.player.gems += cfg.rewards.gems;
-      gameState.player.dust += cfg.rewards.dust;
-      addPlayerExp(cfg.rewards.exp);
-
-      if (cfg.rewards.superDust) gameState.player.superDust += cfg.rewards.superDust;
-      if (cfg.rewards.awakenStone) gameState.player.awakenStones += cfg.rewards.awakenStone;
-      if (cfg.rewards.mythicStone) gameState.player.mythicStones += cfg.rewards.mythicStone;
-
-      alert(`CHIẾN THẮNG HOÀNH TRÁNG!\nNhận: 🪙 +${cfg.rewards.gold} | 🌟 +${cfg.rewards.dust} Bụi Sao | +${cfg.rewards.exp} EXP`);
-    } else {
-      const bCfg = gameState.battle.bossConfig;
-      const dustReward = Math.floor(Math.random() * (bCfg.rewards.dustMax - bCfg.rewards.dustMin)) + bCfg.rewards.dustMin;
-      gameState.player.gold += bCfg.rewards.gold;
-      gameState.player.dust += dustReward;
-      addPlayerExp(bCfg.rewards.exp);
-
-      if (bCfg.rewards.superDustMax > 0) {
-        const sDust = Math.floor(Math.random() * (bCfg.rewards.superDustMax - bCfg.rewards.superDustMin + 1)) + bCfg.rewards.superDustMin;
-        gameState.player.superDust += sDust;
-      }
-      if (bCfg.rewards.awakenStoneMin) {
-        const stones = Math.floor(Math.random() * (bCfg.rewards.awakenStoneMax - bCfg.rewards.awakenStoneMin + 1)) + bCfg.rewards.awakenStoneMin;
-        gameState.player.awakenStones += stones;
-      }
-      if (bCfg.rewards.mythicStoneMin) {
-        const mStones = Math.floor(Math.random() * (bCfg.rewards.mythicStoneMax - bCfg.rewards.mythicStoneMin + 1)) + bCfg.rewards.mythicStoneMin;
-        gameState.player.mythicStones += mStones;
-      }
-
-      gameState.player.bossDefeated = true;
-      triggerGlobalAlert(`CHIẾN THẦN TRẢM MA: Người chơi ${gameState.player.name} vừa hạ gục Đại Thủ Lĩnh [${bCfg.name}]!`);
-      alert(`ĐÃ HẠ GỤC BOSS THẾ GIỚI!\nNhận: 🌟 +${dustReward} Bụi Sao và các Tinh Thể Siêu Cấp quý giá!`);
-    }
-  } else {
-    alert('THẤT BẠI! Hãy cường hóa thẻ trong Lò Rèn và tối ưu lại đội hình để phục thù!');
+  let rewards = { gold: 200, exp: 100, gems: 2, dust: 50, superDust: 0 };
+  if (c.isBossRaid) {
+    const bCfg = c.bossConfig.rewards;
+    rewards.dust = Math.floor(bCfg.dustMin + Math.random() * (bCfg.dustMax - bCfg.dustMin));
+    rewards.superDust = bCfg.superDustMin ? Math.floor(bCfg.superDustMin + Math.random() * (bCfg.superDustMax - bCfg.superDustMin + 1)) : 0;
+    rewards.gold = bCfg.gold;
+    rewards.exp = bCfg.exp;
+  } else if (c.botConfig) {
+    rewards = { ...c.botConfig.rewards };
   }
 
-  document.getElementById('battleArenaView').classList.add('hidden');
-  document.getElementById('botSelectView').classList.remove('hidden');
-  saveGameData();
-  renderTopHUD();
+  gameState.player.gold += rewards.gold;
+  gameState.player.exp += rewards.exp;
+  gameState.player.gems += rewards.gems || 0;
+  gameState.player.normalDust += rewards.dust;
+  gameState.player.superDust += rewards.superDust || 0;
+
+  alert(`🏆 THẮNG LỢI!\nNhận thưởng: +${rewards.gold} 🪙 | +${rewards.exp} EXP | +${rewards.dust} 🌟 ${rewards.superDust ? `| +${rewards.superDust} 🌠` : ''}`);
+  checkLevelUp();
+  returnToArenaLobby();
+}
+
+function handleBattleDefeat() {
+  logCombat(`💀 ĐỘI HÌNH ĐÃ THẤT THỦ! Hãy cường hóa thêm thẻ bài và nâng Team OVR!`);
+  alert('Đội hình của bạn đã bị tiêu diệt hoàn toàn. Hãy quay về rèn sao và bố trí lại!');
+  returnToArenaLobby();
 }
 
 function surrenderBattle() {
-  if (confirm('Bạn có chắc chắn muốn bỏ cuộc trận này?')) {
-    finishBattle(false);
+  if (confirm('Bạn có chắc muốn bỏ cuộc trận này không?')) {
+    returnToArenaLobby();
   }
 }
 
-function logCombat(text) {
-  const logEl = document.getElementById('combatLogText');
-  if (logEl) logEl.innerText = text;
+function returnToArenaLobby() {
+  gameState.combat = null;
+  document.getElementById('battleArenaView').classList.add('hidden');
+  document.getElementById('botSelectView').classList.remove('hidden');
+  updateTopHUD();
 }
 
-// ==================== 8. BUFF & COOLDOWN ====================
+// 10. KÍCH HOẠT BUFF TRONG TRẬN
 function triggerBuff(buffKey) {
-  if (!gameState.battle.active) {
-    alert('Chỉ có thể dùng Buff khi đang trong trận đấu!');
-    return;
-  }
-  if (gameState.buffCooldowns[buffKey] > 0) {
-    alert(`Kỹ năng đang hồi chiêu! Còn ${gameState.buffCooldowns[buffKey]}s`);
-    return;
-  }
-  if (gameState.buffsOwned[buffKey] <= 0) {
-    alert('Bạn đã hết lượt dùng kỹ năng này, hãy mua thêm trong Cửa Hàng!');
+  const c = gameState.combat;
+  if (!c || c.turn !== 'PLAYER') return;
+
+  const inv = gameState.player.buffInventory;
+  if (!inv[buffKey] || inv[buffKey] <= 0) {
+    alert('Bạn đã hết loại Buff này! Hãy mua thêm trong Cửa Hàng.');
     return;
   }
 
-  gameState.buffsOwned[buffKey]--;
-  gameState.buffCooldowns[buffKey] = BATTLE_BUFFS[buffKey].cooldownSec;
+  inv[buffKey]--;
 
   if (buffKey === 'HEAL') {
-    gameState.battle.playerCombatTeam.forEach(c => {
-      if (!c.isDead) {
-        c.currentHp = Math.min(c.maxHp, c.currentHp + Math.floor(c.maxHp * 0.35));
+    c.playerMain.forEach(p => {
+      if (p.currentHp > 0) {
+        const healAmt = Math.round(p.maxHp * 0.35);
+        p.currentHp = Math.min(p.maxHp, p.currentHp + healAmt);
       }
     });
-    logCombat('Kích hoạt Huyết Dược! Toàn đội hồi phục 35% HP.');
+    logCombat(`🧪 Sử dụng Huyết Dược! Hồi 35% HP toàn đội!`);
   } else if (buffKey === 'SHIELD') {
-    gameState.battle.activeBuffs.shield = true;
-    logCombat('Kích hoạt Khiên Bất Tử! Đòn tấn công kế tiếp của địch sẽ vô hiệu.');
+    c.activeBuffs.shieldActive = true;
+    logCombat(`🛡️ Đã bật Khiên Hộ Thể! Đòn đánh kế tiếp của địch sẽ bị chặn hoàn toàn!`);
   } else if (buffKey === 'OVERLOAD') {
-    gameState.battle.activeBuffs.overload = true;
-    logCombat('Kích hoạt Bạo Kích! Đòn đánh kế tiếp tăng +60% ATK.');
+    c.activeBuffs.atkBoost = 1.60;
+    logCombat(`⚡ Bạo Kích Overload! Tăng +60% công kích cho đòn đánh kế tiếp!`);
   } else if (buffKey === 'HASTE') {
-    gameState.battle.activeBuffs.haste = true;
-    logCombat('Kích hoạt Thần Tốc! Tốc độ tăng vọt, sẵn sàng xả 8 hits combo.');
+    c.activeBuffs.hasteActive = true;
+    logCombat(`🌪️ Kích hoạt Thần Tốc! Đòn tiếp theo sẽ xả tối đa 8 cú đánh liên hoàn!`);
   }
 
-  renderBattlefield();
-  renderTopHUD();
+  renderCombatArena();
 }
 
-function startCooldownTimerLoop() {
-  setInterval(() => {
-    ['HEAL', 'SHIELD', 'OVERLOAD', 'HASTE'].forEach(key => {
-      if (gameState.buffCooldowns[key] > 0) {
-        gameState.buffCooldowns[key]--;
-        updateBuffCooldownUI(key);
-      }
-    });
-  }, 1000);
+function updateBuffButtonLabels() {
+  const inv = gameState.player.buffInventory;
+  document.getElementById('countBuffHeal').textContent = inv.HEAL || 0;
+  document.getElementById('countBuffShield').textContent = inv.SHIELD || 0;
+  document.getElementById('countBuffAtk').textContent = inv.OVERLOAD || 0;
+  document.getElementById('countBuffSpeed').textContent = inv.HASTE || 0;
 }
 
-function updateBuffCooldownUI(buffKey) {
-  const overlayMap = {
-    HEAL: 'cdOverlayHeal',
-    SHIELD: 'cdOverlayShield',
-    OVERLOAD: 'cdOverlayAtk',
-    HASTE: 'cdOverlaySpeed'
-  };
-
-  const overlay = document.getElementById(overlayMap[buffKey]);
-  if (!overlay) return;
-
-  const cd = gameState.buffCooldowns[buffKey];
-  if (cd > 0) {
-    overlay.classList.remove('hidden');
-    overlay.querySelector('.cd-number').innerText = cd;
-  } else {
-    overlay.classList.add('hidden');
-  }
-}
-
-function buyBuff(buffKey, costGem) {
-  if (gameState.player.gems < costGem) {
-    alert('Không đủ Tinh Thạch 💎!');
-    return;
-  }
-  gameState.player.gems -= costGem;
-  gameState.buffsOwned[buffKey]++;
-  saveGameData();
-  renderTopHUD();
-}
-
-// ==================== 9. GACHA SYSTEM ====================
+// 11. GACHA CHIÊU MỘ (BẰNG VÀNG & BẰNG GEMS)
 function setPackSize(size) {
-  gameState.selectedPackSize = size;
+  gameState.gachaPackSize = size;
   document.querySelectorAll('.btn-size').forEach(btn => {
-    btn.classList.toggle('active', parseInt(btn.getAttribute('data-size')) === size);
+    btn.classList.toggle('active', parseInt(btn.dataset.size) === size);
   });
+  updateGachaButtonPrices();
+}
 
-  const bCost = GACHA_PACK_TIERS.BRONZE.costPerCard * size;
-  const sCost = GACHA_PACK_TIERS.SILVER.costPerCard * size;
-  const gCost = GACHA_PACK_TIERS.GOLD.costPerCard * size;
-  const dCost = GACHA_PACK_TIERS.DIAMOND.costPerCard * size;
-
-  document.getElementById('btnBuyBronze').innerText = `MỞ (${bCost.toLocaleString()} 🪙)`;
-  document.getElementById('btnBuySilver').innerText = `MỞ (${sCost.toLocaleString()} 🪙)`;
-  document.getElementById('btnBuyGold').innerText = `MỞ (${gCost.toLocaleString()} 🪙)`;
-  document.getElementById('btnBuyDiamond').innerText = `MỞ (${dCost.toLocaleString()} 🪙)`;
+function updateGachaButtonPrices() {
+  const sz = gameState.gachaPackSize;
+  document.getElementById('btnBuyBronze').textContent = `MỞ (${(40 * sz).toLocaleString('vi-VN')} 🪙)`;
+  document.getElementById('btnBuySilver').textContent = `MỞ (${(100 * sz).toLocaleString('vi-VN')} 🪙)`;
+  document.getElementById('btnBuyGold').textContent = `MỞ (${(250 * sz).toLocaleString('vi-VN')} 🪙)`;
+  document.getElementById('btnBuyDiamond').textContent = `MỞ (${(600 * sz).toLocaleString('vi-VN')} 🪙)`;
 }
 
 function buyGachaPack(packTierKey) {
-  const packTier = GACHA_PACK_TIERS[packTierKey];
-  const totalCost = packTier.costPerCard * gameState.selectedPackSize;
+  const tierCfg = GACHA_PACK_TIERS[packTierKey];
+  const totalCost = tierCfg.costPerCard * gameState.gachaPackSize;
 
   if (gameState.player.gold < totalCost) {
-    alert('Không đủ Vàng để mở gói này!');
+    alert(`Không đủ Vàng! Cần ${totalCost.toLocaleString('vi-VN')} 🪙 để mở gói này.`);
     return;
   }
 
   gameState.player.gold -= totalCost;
-  addPlayerExp(gameState.selectedPackSize * 10);
-  renderTopHUD();
+  updateTopHUD();
 
-  const drawnCards = [];
-  const ranksOpened = [];
+  const pulledCards = [];
+  for (let i = 0; i < gameState.gachaPackSize; i++) {
+    pulledCards.push(rollSingleCard(tierCfg));
+  }
 
-  for (let i = 0; i < gameState.selectedPackSize; i++) {
-    const rolledRank = rollRankFromRates(packTier.rates);
-    ranksOpened.push(rolledRank);
-    const pool = ALL_500_CARDS.filter(c => c.rank === rolledRank);
-    const chosenBase = pool[Math.floor(Math.random() * pool.length)];
-    const inst = createCardInstance(chosenBase.id, 0);
+  displayGachaRevealView(pulledCards);
+}
 
-    gameState.inventory.push(inst);
-    drawnCards.push({ instance: inst, base: chosenBase });
+function buyGemGachaPack(gemTierKey, amount) {
+  const tierCfg = GEMS_GACHA_TIERS[gemTierKey];
+  const cost = amount === 10 ? tierCfg.pack10DiscountCost : tierCfg.costPerCard * amount;
 
-    if (rolledRank === 'SSS') {
-      gameState.player.unlockedSSS++;
-      triggerGlobalAlert(`ĐẠI KỲ TÍCH: Người chơi ${gameState.player.name} vừa thức tỉnh THẦN THOẠI [${chosenBase.name}]!`);
+  if (gameState.player.gems < cost) {
+    alert(`Không đủ Tinh Thạch! Cần ${cost} 💎 để mở.`);
+    return;
+  }
+
+  gameState.player.gems -= cost;
+  updateTopHUD();
+
+  const pulledCards = [];
+  for (let i = 0; i < amount; i++) {
+    pulledCards.push(rollSingleCard(tierCfg));
+  }
+
+  displayGachaRevealView(pulledCards);
+}
+
+function rollSingleCard(cfg) {
+  const rand = Math.random();
+  let cumulative = 0;
+  let chosenRank = 'C';
+
+  for (const [rank, rate] of Object.entries(cfg.rates)) {
+    cumulative += rate;
+    if (rand <= cumulative) {
+      chosenRank = rank;
+      break;
     }
   }
 
-  saveGameData();
-  renderPackRevealView(drawnCards, ranksOpened);
-}
+  // Nếu rơi vào nhóm EVENT Halloween
+  if (chosenRank === 'EVENT') {
+    const eRand = Math.random();
+    let eCardId = 'CARD_EVENT_XINGLENG';
+    if (eRand < 0.30) eCardId = 'CARD_EVENT_DARK_LORD';
+    else if (eRand < 0.70) eCardId = 'CARD_EVENT_XINGLENG';
+    else eCardId = 'CARD_EVENT_ADX';
 
-function rollRankFromRates(rates) {
-  const rand = Math.random();
-  let cumulative = 0;
-  for (const [rank, prob] of Object.entries(rates)) {
-    cumulative += prob;
-    if (rand <= cumulative) return rank;
+    const baseTemplate = HALLOWEEN_EVENT_CARDS.find(c => c.id === eCardId);
+    return createNewCardInstance(baseTemplate);
   }
-  return 'C';
+
+  // Rút thẻ tiêu chuẩn
+  const candidates = ALL_500_CARDS.filter(c => c.rank === chosenRank);
+  const selectedTemplate = candidates[Math.floor(Math.random() * candidates.length)];
+  return createNewCardInstance(selectedTemplate);
 }
 
-function renderPackRevealView(drawnCards, ranksOpened) {
+function createNewCardInstance(template) {
+  return {
+    uniqueId: `CARD_UID_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+    id: template.id,
+    name: template.name,
+    rank: template.rank,
+    element: template.element,
+    elementInfo: template.elementInfo,
+    baseAtk: template.baseAtk,
+    baseHp: template.baseHp,
+    baseSpd: template.baseSpd,
+    stars: 0,
+    targetType: template.targetType,
+    unlockedSkill: template.unlockedSkill
+  };
+}
+
+// HIỂN THỊ MÀN HÌNH LẬT BÀI GACHA
+function displayGachaRevealView(cards) {
   document.getElementById('gachaStoreView').classList.add('hidden');
   const revealView = document.getElementById('gachaRevealView');
   revealView.classList.remove('hidden');
 
   const grid = document.getElementById('cardsRevealGrid');
   grid.innerHTML = '';
-  document.getElementById('closeRevealBtn').classList.add('hidden');
 
-  drawnCards.forEach(item => {
-    const cWrap = document.createElement('div');
-    cWrap.className = 'card-3d-wrap';
-    cWrap.innerHTML = `
+  cards.forEach(card => {
+    gameState.player.inventory.push(card);
+    const wrap = document.createElement('div');
+    wrap.className = 'card-3d-wrap';
+    wrap.innerHTML = `
       <div class="card-inner">
         <div class="card-back">🎴</div>
-        <div class="card-front rank-${item.base.rank.toLowerCase()}">
-          <div class="card-rank-tag">${item.base.rank}</div>
-          <div class="card-element-icon">${item.base.elementInfo.icon}</div>
-          <div class="card-name">${item.base.name}</div>
-          <div class="card-stats-row">
-            <span class="atk">⚔️ ${item.base.baseAtk}</span>
-            <span class="hp">🩸 ${item.base.baseHp}</span>
-          </div>
+        <div class="card-front rank-${card.rank.toLowerCase()}">
+          <div class="card-stars">★ ${card.rank}</div>
+          <div class="card-art-emoji">${card.elementInfo ? card.elementInfo.icon : '⚔️'}</div>
+          <div class="card-title">${card.name}</div>
+          <div style="font-size: 11px; color: #ff5964;">⚔️ ${card.baseAtk}</div>
         </div>
       </div>
     `;
-
-    cWrap.addEventListener('click', () => {
-      cWrap.classList.add('flipped');
-      checkAllCardsFlipped();
-    });
-
-    grid.appendChild(cWrap);
+    wrap.onclick = () => wrap.classList.add('flipped');
+    grid.appendChild(wrap);
   });
 
-  checkAndTriggerComboBanner(ranksOpened);
-}
-
-function skipPackReveal() {
-  document.querySelectorAll('.card-3d-wrap').forEach(wrap => wrap.classList.add('flipped'));
   document.getElementById('closeRevealBtn').classList.remove('hidden');
 }
 
-function checkAllCardsFlipped() {
-  const allCards = document.querySelectorAll('.card-3d-wrap');
-  const flipped = document.querySelectorAll('.card-3d-wrap.flipped');
-  if (allCards.length === flipped.length) {
-    document.getElementById('closeRevealBtn').classList.remove('hidden');
-  }
+function skipPackReveal() {
+  document.querySelectorAll('.card-3d-wrap').forEach(w => w.classList.add('flipped'));
 }
 
 function finishPackOpening() {
   document.getElementById('gachaRevealView').classList.add('hidden');
   document.getElementById('gachaStoreView').classList.remove('hidden');
-  renderTopHUD();
+  renderDeckAndCollection();
+  renderForgePickerList();
+  updateTopHUD();
 }
 
-function checkAndTriggerComboBanner(ranks) {
-  const counts = {};
-  ranks.forEach(r => counts[r] = (counts[r] || 0) + 1);
+// 12. CỬA HÀNG TRAO ĐỔI TÀI NGUYÊN (EXCHANGE MARKET)
+function exchangeResource(type) {
+  const p = gameState.player;
 
-  let comboMsg = null;
-  if (counts['SSS'] >= 3) {
-    comboMsg = { title: 'THẦN MA GIÁNG THẾ', sub: 'Mở được từ 3 thẻ SSS trở lên trong một gói!' };
-  } else if (Object.values(counts).some(cnt => cnt >= 10)) {
-    comboMsg = { title: 'THẬP TOÀN THẬP MỸ', sub: '10 Thẻ Đồng Rank Xuất Hiện!' };
-  } else if (Object.values(counts).some(cnt => cnt >= 5)) {
-    comboMsg = { title: 'NGŨ QUÝ BỘ BÀI', sub: '5 Thẻ Đồng Rank Cùng Giáng Trần!' };
-  } else if (Object.values(counts).some(cnt => cnt >= 3)) {
-    comboMsg = { title: 'TAM HOA TỤ ĐỈNH', sub: '3 Thẻ Đồng Rank Phát Quang!' };
+  switch (type) {
+    case 'GOLD_TO_GEMS':
+      if (p.gold < 10000) return alert('Không đủ 10.000 🪙!');
+      p.gold -= 10000; p.gems += 15;
+      break;
+    case 'GOLD_TO_DUST':
+      if (p.gold < 8000) return alert('Không đủ 8.000 🪙!');
+      p.gold -= 8000; p.normalDust += 250;
+      break;
+    case 'GOLD_TO_SUPERDUST':
+      if (p.gold < 35000) return alert('Không đủ 35.000 🪙!');
+      p.gold -= 35000; p.superDust += 1;
+      break;
+
+    case 'GEMS_TO_GOLD':
+      if (p.gems < 20) return alert('Không đủ 20 💎!');
+      p.gems -= 20; p.gold += 10000;
+      break;
+    case 'GEMS_TO_DUST':
+      if (p.gems < 20) return alert('Không đủ 20 💎!');
+      p.gems -= 20; p.normalDust += 500;
+      break;
+    case 'GEMS_TO_SUPERDUST':
+      if (p.gems < 35) return alert('Không đủ 35 💎!');
+      p.gems -= 35; p.superDust += 1;
+      break;
+
+    case 'DUST_TO_GOLD':
+      if (p.normalDust < 500) return alert('Không đủ 500 🌟!');
+      p.normalDust -= 500; p.gold += 4000;
+      break;
+    case 'DUST_TO_GEMS':
+      if (p.normalDust < 800) return alert('Không đủ 800 🌟!');
+      p.normalDust -= 800; p.gems += 15;
+      break;
+    case 'DUST_TO_SUPERDUST':
+      if (p.normalDust < 1000) return alert('Không đủ 1.000 🌟!');
+      p.normalDust -= 1000; p.superDust += 1;
+      break;
+
+    case 'SUPERDUST_TO_DUST':
+      if (p.superDust < 1) return alert('Không đủ 1 🌠!');
+      p.superDust -= 1; p.normalDust += 650;
+      break;
+    case 'SUPERDUST_TO_GEMS':
+      if (p.superDust < 1) return alert('Không đủ 1 🌠!');
+      p.superDust -= 1; p.gems += 20;
+      break;
+    case 'SUPERDUST_TO_GOLD':
+      if (p.superDust < 1) return alert('Không đủ 1 🌠!');
+      p.superDust -= 1; p.gold += 20000;
+      break;
   }
 
-  if (comboMsg) {
-    document.getElementById('comboTitle').innerText = comboMsg.title;
-    document.getElementById('comboSub').innerText = comboMsg.sub;
-    document.getElementById('comboBannerModal').classList.remove('hidden');
+  updateTopHUD();
+}
+
+// 13. LÒ RÈN & NÂNG SAO THẺ BÀI
+function selectCardForForge(uniqueId) {
+  gameState.selectedForgeCardUniqueId = uniqueId;
+  renderForgeTargetPanel();
+  renderForgePickerList();
+}
+
+function renderForgeTargetPanel() {
+  const box = document.getElementById('forgeTargetBox');
+  const btnUpgrade = document.getElementById('btnExecuteUpgrade');
+  const btnScrap = document.getElementById('btnScrapSelectedCard');
+
+  if (!gameState.selectedForgeCardUniqueId) {
+    box.innerHTML = '<div class="forge-empty-prompt">Bấm "Chọn Rèn" ở danh sách bên phải để đưa thẻ vào lò</div>';
+    btnUpgrade.disabled = true;
+    btnScrap.disabled = true;
+    document.getElementById('scrapValuePreview').textContent = 'Giá trị: - Bụi Sao';
+    return;
+  }
+
+  const card = gameState.player.inventory.find(c => c.uniqueId === gameState.selectedForgeCardUniqueId);
+  if (!card) return;
+
+  const currentStars = card.stars || 0;
+  const nextStar = currentStars + 1;
+  const scrapVal = CARD_SCRAP_VALUES[card.rank];
+
+  box.innerHTML = `
+    <div class="battle-card rank-${card.rank.toLowerCase()}" style="cursor: default;">
+      <div class="card-stars ${currentStars >= 6 ? 'mythic-stars' : ''}">★ ${currentStars}</div>
+      <div class="card-art-emoji">${card.elementInfo ? card.elementInfo.icon : '⚔️'}</div>
+      <div class="card-title">${card.name}</div>
+      <div class="card-combat-stats">
+        <span class="atk">⚔️ ${Math.round(card.baseAtk * (1 + currentStars * 0.15))}</span>
+        <span class="spd">⚡ ${card.baseSpd}</span>
+      </div>
+      <div style="font-size: 10px; color: #ffbe0b;">CP: ${calculateCardCP(card)}</div>
+    </div>
+  `;
+
+  document.getElementById('forgeUpgradeTitle').textContent = nextStar <= 7 ? `YÊU CẦU NÂNG CẤP LÊN ${nextStar} SAO ⭐` : 'ĐÃ ĐẠT CỰC HẠN 7 SAO ⭐';
+  document.getElementById('scrapValuePreview').textContent = `Nhận: +${scrapVal.normalDust} 🌟 ${scrapVal.superDust ? `| +${scrapVal.superDust} 🌠` : ''}`;
+
+  btnScrap.disabled = false;
+
+  if (nextStar > 7) {
+    document.getElementById('reqDust').textContent = 'Đã đạt mốc cao nhất';
+    document.getElementById('reqSuperDust').textContent = 'Không cần thêm';
+    btnUpgrade.disabled = true;
+    return;
+  }
+
+  const req = STAR_UPGRADE_REQUIREMENTS[nextStar];
+  document.getElementById('reqDust').textContent = `🌟 Bụi Sao Thường: ${gameState.player.normalDust.toLocaleString('vi-VN')} / ${req.normalDust.toLocaleString('vi-VN')}`;
+  document.getElementById('reqSuperDust').textContent = req.superDust > 0 ? `🌠 Bụi Sao Siêu Cấp: ${gameState.player.superDust} / ${req.superDust}` : '🌠 Bụi Sao Siêu Cấp: Không cần';
+
+  const canAfford = gameState.player.normalDust >= req.normalDust && gameState.player.superDust >= req.superDust;
+  btnUpgrade.disabled = !canAfford;
+}
+
+function executeCardUpgrade() {
+  const card = gameState.player.inventory.find(c => c.uniqueId === gameState.selectedForgeCardUniqueId);
+  if (!card) return;
+
+  const nextStar = (card.stars || 0) + 1;
+  const req = STAR_UPGRADE_REQUIREMENTS[nextStar];
+
+  gameState.player.normalDust -= req.normalDust;
+  gameState.player.superDust -= req.superDust;
+  card.stars = nextStar;
+
+  updateTopHUD();
+  renderForgeTargetPanel();
+  renderDeckAndCollection();
+}
+
+function scrapSelectedCard() {
+  const card = gameState.player.inventory.find(c => c.uniqueId === gameState.selectedForgeCardUniqueId);
+  if (!card) return;
+
+  const inDeck = gameState.player.deck.main.some(c => c.uniqueId === card.uniqueId) || gameState.player.deck.sub.some(c => c.uniqueId === card.uniqueId);
+  if (inDeck) {
+    alert('Không thể phân tách thẻ đang nằm trong Đội Hình!');
+    return;
+  }
+
+  const scrapVal = CARD_SCRAP_VALUES[card.rank];
+  if (confirm(`Phân tách [${card.name}] để nhận ${scrapVal.normalDust} 🌟 ${scrapVal.superDust ? `và ${scrapVal.superDust} 🌠` : ''}?`)) {
+    gameState.player.normalDust += scrapVal.normalDust;
+    gameState.player.superDust += scrapVal.superDust;
+    gameState.player.inventory = gameState.player.inventory.filter(c => c.uniqueId !== card.uniqueId);
+    gameState.selectedForgeCardUniqueId = null;
+
+    updateTopHUD();
+    renderForgeTargetPanel();
+    renderForgePickerList();
+    renderDeckAndCollection();
   }
 }
 
-function closeComboBanner() {
-  document.getElementById('comboBannerModal').classList.add('hidden');
+// 14. PHÂN TÁCH HÀNG LOẠT THEO RANK (MULTI-RANK BATCH SCRAP)
+function openBatchScrapModal() {
+  document.getElementById('batchScrapModal').classList.remove('hidden');
+  updateBatchScrapPreview();
 }
 
-// ==================== 10. MINIGAME CÀY TIỀN ====================
+function closeBatchScrapModal() {
+  document.getElementById('batchScrapModal').classList.add('hidden');
+}
+
+function getBatchScrapCandidates() {
+  const chkC = document.getElementById('chkScrapC').checked;
+  const chkB = document.getElementById('chkScrapB').checked;
+  const chkA = document.getElementById('chkScrapA').checked;
+  const chkS = document.getElementById('chkScrapS').checked;
+  const chkSSS = document.getElementById('chkScrapSSS').checked;
+
+  const equippedIds = new Set([
+    ...gameState.player.deck.main.map(c => c.uniqueId),
+    ...gameState.player.deck.sub.map(c => c.uniqueId)
+  ]);
+
+  return gameState.player.inventory.filter(c => {
+    if (c.stars && c.stars > 0) return false; // Khóa bảo vệ thẻ đã có sao
+    if (equippedIds.has(c.uniqueId)) return false; // Không chạm thẻ trong đội hình
+
+    if (c.rank === 'C' && chkC) return true;
+    if (c.rank === 'B' && chkB) return true;
+    if (c.rank === 'A' && chkA) return true;
+    if (c.rank === 'S' && chkS) return true;
+    if (c.rank === 'SSS' && chkSSS) return true;
+    return false;
+  });
+}
+
+function updateBatchScrapPreview() {
+  const candidates = getBatchScrapCandidates();
+  let totalDust = 0;
+  let totalSuperDust = 0;
+
+  candidates.forEach(c => {
+    const val = CARD_SCRAP_VALUES[c.rank];
+    totalDust += val.normalDust;
+    totalSuperDust += val.superDust;
+  });
+
+  document.getElementById('batchScrapCount').textContent = candidates.length;
+  document.getElementById('batchDustPreview').textContent = `+${totalDust.toLocaleString('vi-VN')}`;
+  document.getElementById('batchSuperDustPreview').textContent = `+${totalSuperDust}`;
+  document.getElementById('btnConfirmBatchScrap').disabled = candidates.length === 0;
+}
+
+function executeBatchScrap() {
+  const candidates = getBatchScrapCandidates();
+  if (candidates.length === 0) return;
+
+  const chkSSS = document.getElementById('chkScrapSSS').checked;
+  if (chkSSS && candidates.some(c => c.rank === 'SSS')) {
+    if (!confirm('CẢNH BÁO: Danh sách tách có chứa thẻ RANK SSS! Bạn có chắc chắn 100% muốn phân tách?')) return;
+  }
+
+  let totalDust = 0;
+  let totalSuperDust = 0;
+  const candidateIds = new Set(candidates.map(c => c.uniqueId));
+
+  candidates.forEach(c => {
+    const val = CARD_SCRAP_VALUES[c.rank];
+    totalDust += val.normalDust;
+    totalSuperDust += val.superDust;
+  });
+
+  gameState.player.normalDust += totalDust;
+  gameState.player.superDust += totalSuperDust;
+  gameState.player.inventory = gameState.player.inventory.filter(c => !candidateIds.has(c.uniqueId));
+
+  closeBatchScrapModal();
+  updateTopHUD();
+  renderForgePickerList();
+  renderDeckAndCollection();
+  alert(`Đã phân tách thành công ${candidates.length} thẻ!\nThu về: +${totalDust.toLocaleString('vi-VN')} 🌟 | +${totalSuperDust} 🌠`);
+}
+
+// 15. BỐ TRÍ ĐỘI HÌNH & TỰ ĐỘNG TỐI ƯU HÓA CP
+function autoOptimizeFormation() {
+  const sorted = [...gameState.player.inventory].sort((a, b) => calculateCardCP(b) - calculateCardCP(a));
+
+  gameState.player.deck.main = sorted.slice(0, 5);
+  gameState.player.deck.sub = sorted.slice(5, 5 + gameState.player.benchCapacity);
+
+  renderDeckAndCollection();
+  updateTopHUD();
+  alert('Đã tự động sắp xếp 5 thẻ Tiên Phong và dàn Dự Bị có lực chiến (CP) cao nhất!');
+}
+
+function upgradeBenchCapacity() {
+  if (gameState.player.benchCapacity >= 10) return alert('Đã đạt số lượng ghế dự bị tối đa (10 ô)!');
+  const cost = gameState.player.benchCapacity * 15;
+  if (gameState.player.gems < cost) return alert(`Không đủ Tinh Thạch! Cần ${cost} 💎 để mở rộng ô dự bị.`);
+
+  gameState.player.gems -= cost;
+  gameState.player.benchCapacity++;
+  updateTopHUD();
+  renderDeckAndCollection();
+}
+
+function renderDeckAndCollection() {
+  // Render Main Deck
+  const mainRow = document.getElementById('deckMainRow');
+  mainRow.innerHTML = '';
+  gameState.player.deck.main.forEach((card, idx) => {
+    const el = createDeckCardElement(card, 'MAIN', idx);
+    mainRow.appendChild(el);
+  });
+
+  // Render Sub Deck
+  const subRow = document.getElementById('deckSubRow');
+  subRow.innerHTML = '';
+  for (let i = 0; i < gameState.player.benchCapacity; i++) {
+    const card = gameState.player.deck.sub[i];
+    if (card) {
+      subRow.appendChild(createDeckCardElement(card, 'SUB', i));
+    } else {
+      const emptySlot = document.createElement('div');
+      emptySlot.className = 'bench-card';
+      emptySlot.style.borderStyle = 'dashed';
+      emptySlot.style.opacity = '0.5';
+      emptySlot.innerHTML = `<div style="font-size: 10px; color: #7f8b9f; margin-top: 50px;">Ô Trống ${i + 1}</div>`;
+      subRow.appendChild(emptySlot);
+    }
+  }
+
+  // Render Collection
+  const grid = document.getElementById('collectionGrid');
+  grid.innerHTML = '';
+  const filtered = gameState.player.inventory.filter(c => gameState.activeFilterRank === 'ALL' || c.rank === gameState.activeFilterRank);
+
+  filtered.forEach(card => {
+    const el = document.createElement('div');
+    el.className = `battle-card rank-${card.rank.toLowerCase()}`;
+    const cp = calculateCardCP(card);
+
+    el.innerHTML = `
+      <div class="card-stars ${card.stars >= 6 ? 'mythic-stars' : ''}">★ ${card.stars || 0}</div>
+      <div class="card-art-emoji">${card.elementInfo ? card.elementInfo.icon : '⚔️'}</div>
+      <div class="card-title">${card.name}</div>
+      <div class="card-combat-stats">
+        <span class="atk">⚔️ ${Math.round(card.baseAtk * (1 + (card.stars || 0) * 0.15))}</span>
+        <span class="spd">⚡ ${card.baseSpd}</span>
+      </div>
+      <div style="font-size: 10px; color: #ffbe0b;">CP: ${cp}</div>
+      <button class="btn-select-for-forge" style="margin-top: 4px;" onclick="equipToMainDeck('${card.uniqueId}')">Trang Bị</button>
+    `;
+    grid.appendChild(el);
+  });
+}
+
+function equipToMainDeck(uniqueId) {
+  const card = gameState.player.inventory.find(c => c.uniqueId === uniqueId);
+  if (!card) return;
+
+  // Nếu đã nằm trong main deck thì bỏ qua
+  if (gameState.player.deck.main.some(c => c.uniqueId === uniqueId)) return;
+
+  // Xóa khỏi sub nếu có
+  gameState.player.deck.sub = gameState.player.deck.sub.filter(c => c.uniqueId !== uniqueId);
+
+  if (gameState.player.deck.main.length < 5) {
+    gameState.player.deck.main.push(card);
+  } else {
+    gameState.player.deck.main[4] = card; // Thay thế vị trí số 5
+  }
+
+  renderDeckAndCollection();
+  updateTopHUD();
+}
+
+function createDeckCardElement(card, slotType, idx) {
+  const el = document.createElement('div');
+  el.className = `bench-card rank-${card.rank.toLowerCase()}`;
+  el.draggable = true;
+
+  el.innerHTML = `
+    <div class="card-stars ${card.stars >= 6 ? 'mythic-stars' : ''}">★ ${card.stars || 0}</div>
+    <div class="card-art-emoji" style="font-size: 24px;">${card.elementInfo ? card.elementInfo.icon : '⚔️'}</div>
+    <div class="card-title">${card.name}</div>
+    <div style="font-size: 10px; color: #ffbe0b;">CP: ${calculateCardCP(card)}</div>
+  `;
+
+  // Kéo thả đảo vị trí (Drag and Drop)
+  el.ondragstart = (e) => e.dataTransfer.setData('text/plain', JSON.stringify({ slotType, idx }));
+  el.ondragover = (e) => e.preventDefault();
+  el.ondrop = (e) => {
+    e.preventDefault();
+    const src = JSON.parse(e.dataTransfer.getData('text/plain'));
+    swapDeckCards(src, { slotType, idx });
+  };
+
+  return el;
+}
+
+function swapDeckCards(src, dest) {
+  const srcList = src.slotType === 'MAIN' ? gameState.player.deck.main : gameState.player.deck.sub;
+  const destList = dest.slotType === 'MAIN' ? gameState.player.deck.main : gameState.player.deck.sub;
+
+  const temp = srcList[src.idx];
+  srcList[src.idx] = destList[dest.idx];
+  destList[dest.idx] = temp;
+
+  renderDeckAndCollection();
+  updateTopHUD();
+}
+
+function filterCards(rank) {
+  gameState.activeFilterRank = rank;
+  document.querySelectorAll('.filter-group .filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.includes(rank === 'ALL' ? 'Tất Cả' : rank));
+  });
+  renderDeckAndCollection();
+}
+
+function filterForgeCards(rank) {
+  gameState.activeForgeFilterRank = rank;
+  document.querySelectorAll('.forge-filter-row .filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.includes(rank === 'ALL' ? 'Tất Cả' : rank));
+  });
+  renderForgePickerList();
+}
+
+function renderForgePickerList() {
+  const list = document.getElementById('forgeCardsPicker');
+  list.innerHTML = '';
+
+  const filtered = gameState.player.inventory.filter(c => gameState.activeForgeFilterRank === 'ALL' || c.rank === gameState.activeForgeFilterRank);
+
+  filtered.forEach(card => {
+    const item = document.createElement('div');
+    item.className = `picker-card-item rank-${card.rank.toLowerCase()} ${card.uniqueId === gameState.selectedForgeCardUniqueId ? 'selected-target' : ''}`;
+    item.innerHTML = `
+      <div style="font-size: 10px; font-weight: 700;">★ ${card.stars || 0}</div>
+      <div style="font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90px;">${card.name}</div>
+      <button class="btn-select-for-forge" style="margin-top: 4px;" onclick="selectCardForForge('${card.uniqueId}')">Chọn Rèn</button>
+    `;
+    list.appendChild(item);
+  });
+}
+
+// 16. TIỆM MUA BUFF TRẬN ĐẤU
+function buyBuff(buffKey, gemCost) {
+  if (gameState.player.gems < gemCost) return alert(`Không đủ Tinh Thạch! Cần ${gemCost} 💎 để mua.`);
+  gameState.player.gems -= gemCost;
+  gameState.player.buffInventory[buffKey] = (gameState.player.buffInventory[buffKey] || 0) + 1;
+  updateTopHUD();
+  updateBuffButtonLabels();
+  alert('Đã mua thành công 1 Buff chiến thuật!');
+}
+
+// 17. MINIGAME 30 GIÂY CÀY TIỀN & GEMS
 let minigameInterval = null;
-let currentMinigameScore = 0;
-let minigameTimeLeft = 30;
+let minigameTimerSec = 30;
+let minigameScore = 0;
+let minigameGems = 0;
 
 function startMinigame() {
-  currentMinigameScore = 0;
-  minigameTimeLeft = 30;
-  document.getElementById('minigameScore').innerText = '0';
-  document.getElementById('minigameTimer').innerText = '30s';
-  document.getElementById('minigameGoldEarned').innerText = '0';
+  const board = document.getElementById('minigameField');
+  board.innerHTML = '';
 
-  const field = document.getElementById('minigameField');
-  field.innerHTML = '';
+  minigameTimerSec = 30;
+  minigameScore = 0;
+  minigameGems = 0;
+  gameState.minigameActive = true;
+
+  document.getElementById('minigameTimer').textContent = '30s';
+  document.getElementById('minigameScore').textContent = '0';
+  document.getElementById('minigameGoldEarned').textContent = '0';
+  document.getElementById('minigameGemsEarned').textContent = '0';
 
   minigameInterval = setInterval(() => {
-    minigameTimeLeft--;
-    document.getElementById('minigameTimer').innerText = `${minigameTimeLeft}s`;
-    if (minigameTimeLeft <= 0) {
+    minigameTimerSec--;
+    document.getElementById('minigameTimer').textContent = `${minigameTimerSec}s`;
+
+    if (minigameTimerSec <= 0) {
       endMinigame();
+    } else {
+      spawnMinigameTargets();
     }
   }, 1000);
 
-  spawnCoinTarget();
+  spawnMinigameTargets();
 }
 
-function spawnCoinTarget() {
-  if (minigameTimeLeft <= 0) return;
-  const field = document.getElementById('minigameField');
-  field.innerHTML = '';
+function spawnMinigameTargets() {
+  if (!gameState.minigameActive) return;
+  const board = document.getElementById('minigameField');
+  board.innerHTML = '';
 
-  const coin = document.createElement('div');
-  coin.className = 'coin-target';
-  coin.innerText = '🪙';
+  const randX = Math.floor(Math.random() * (board.clientWidth - 60));
+  const randY = Math.floor(Math.random() * (board.clientHeight - 60));
 
-  const maxX = field.clientWidth - 60;
-  const maxY = field.clientHeight - 60;
-  coin.style.left = `${Math.floor(Math.random() * Math.max(10, maxX))}px`;
-  coin.style.top = `${Math.floor(Math.random() * Math.max(10, maxY))}px`;
+  const target = document.createElement('div');
+  const roll = Math.random();
 
-  coin.onclick = () => {
-    currentMinigameScore += 10;
-    const earned = currentMinigameScore * 5;
-    document.getElementById('minigameScore').innerText = currentMinigameScore;
-    document.getElementById('minigameGoldEarned').innerText = earned.toLocaleString();
-    spawnCoinTarget();
-  };
+  if (roll < 0.15) {
+    // 💎 Gems may mắn
+    target.className = 'gem-target';
+    target.textContent = '💎';
+    target.style.left = `${randX}px`;
+    target.style.top = `${randY}px`;
+    target.onclick = () => {
+      minigameGems++;
+      document.getElementById('minigameGemsEarned').textContent = minigameGems;
+      target.remove();
+    };
+  } else if (roll < 0.30) {
+    // 💣 Quả bom trừ thời gian
+    target.className = 'bomb-target';
+    target.textContent = '💣';
+    target.style.left = `${randX}px`;
+    target.style.top = `${randY}px`;
+    target.onclick = () => {
+      minigameTimerSec = Math.max(1, minigameTimerSec - 3);
+      document.getElementById('minigameTimer').textContent = `${minigameTimerSec}s`;
+      target.remove();
+    };
+  } else {
+    // 🪙 Xu vàng tiêu chuẩn
+    target.className = 'coin-target';
+    target.textContent = '🪙';
+    target.style.left = `${randX}px`;
+    target.style.top = `${randY}px`;
+    target.onclick = () => {
+      minigameScore += 10;
+      const goldEarned = Math.round(minigameScore * 2.5);
+      document.getElementById('minigameScore').textContent = minigameScore;
+      document.getElementById('minigameGoldEarned').textContent = goldEarned;
+      target.remove();
+      spawnMinigameTargets();
+    };
+  }
 
-  field.appendChild(coin);
+  board.appendChild(target);
 }
 
 function endMinigame() {
   clearInterval(minigameInterval);
-  const earned = currentMinigameScore * 5;
-  gameState.player.gold += earned;
-  addPlayerExp(Math.floor(currentMinigameScore * 1.5));
-  saveGameData();
-  renderTopHUD();
+  gameState.minigameActive = false;
+  const totalGoldEarned = Math.round(minigameScore * 2.5);
 
-  const field = document.getElementById('minigameField');
-  field.innerHTML = `<button id="startMinigameBtn" class="btn-gold" onclick="startMinigame()">BẮT ĐẦU CÀY TIỀN 🪙</button>`;
-  alert(`KẾT THÚC MINIGAME!\nBạn đã thu hoạch được ${earned.toLocaleString()} Vàng 🪙!`);
+  gameState.player.gold += totalGoldEarned;
+  gameState.player.gems += minigameGems;
+  updateTopHUD();
+
+  const board = document.getElementById('minigameField');
+  board.innerHTML = `
+    <div style="text-align:center;">
+      <h3>HẾT GIỜ!</h3>
+      <p style="margin: 10px 0;">Thu về: +${totalGoldEarned.toLocaleString('vi-VN')} 🪙 | +${minigameGems} 💎</p>
+      <button class="btn-gold" onclick="startMinigame()">CHƠI TIẾP 🪙</button>
+    </div>
+  `;
 }
 
-function triggerGlobalAlert(message) {
-  const alertBar = document.getElementById('globalServerAlert');
-  const msgEl = document.getElementById('alertMessage');
-  if (!alertBar || !msgEl) return;
-  msgEl.innerText = message;
-  alertBar.classList.remove('hidden');
+// 18. LÊN CẤP NGƯỜI CHƠI
+function checkLevelUp() {
+  const maxExp = gameState.player.level * 175;
+  if (gameState.player.exp >= maxExp) {
+    gameState.player.exp -= maxExp;
+    gameState.player.level++;
 
-  if (typeof broadcastServerAlert === 'function') {
-    broadcastServerAlert(message);
+    const goldReward = gameState.player.level * 500;
+    const gemsReward = gameState.player.level * 5;
+    gameState.player.gold += goldReward;
+    gameState.player.gems += gemsReward;
+
+    document.getElementById('modalNewLevel').textContent = `CẤP ĐỘ ${gameState.player.level}`;
+    document.getElementById('modalLevelRewards').innerHTML = `
+      <div>+${goldReward.toLocaleString('vi-VN')} Vàng 🪙</div>
+      <div>+${gemsReward} Tinh Thạch 💎</div>
+    `;
+    document.getElementById('levelUpModal').classList.remove('hidden');
+    updateTopHUD();
   }
-
-  setTimeout(() => alertBar.classList.add('hidden'), 6000);
 }
+
+function closeLevelUpModal() {
+  document.getElementById('levelUpModal').classList.add('hidden');
+}
+
+// 19. HỖ TRỢ HIỆU ỨNG CHIẾN ĐẤU & NHẬT KÝ
+function logCombat(msg) {
+  const logEl = document.getElementById('combatLogText');
+  if (logEl) logEl.textContent = msg;
+}
+
+function showMultiHitText(text) {
+  const popup = document.getElementById('multiHitBurst');
+  if (!popup) return;
+  popup.textContent = text;
+  popup.classList.remove('hidden');
+  setTimeout(() => popup.classList.add('hidden'), 900);
+}
+
+// ĐIỀU HƯỚNG TABS
+document.querySelectorAll('.main-navigation .nav-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.main-navigation .nav-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+
+    btn.classList.add('active');
+    const tabId = btn.dataset.tab;
+    document.getElementById(tabId).classList.add('active');
+    gameState.currentTab = tabId;
+
+    if (tabId === 'deckTab') renderDeckAndCollection();
+    if (tabId === 'forgeTab') {
+      renderForgeTargetPanel();
+      renderForgePickerList();
+    }
+  };
+});
+
+// KHỞI ĐỘNG GAME LẦN ĐẦU
+window.onload = () => {
+  // Tặng tân thủ một số thẻ để trải nghiệm
+  if (gameState.player.inventory.length === 0) {
+    for (let i = 0; i < 7; i++) {
+      gameState.player.inventory.push(createNewCardInstance(ALL_500_CARDS[i]));
+    }
+    autoOptimizeFormation();
+  }
+  updateTopHUD();
+  updateGachaButtonPrices();
+};
